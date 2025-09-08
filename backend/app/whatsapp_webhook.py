@@ -51,7 +51,8 @@ async def whatsapp_webhook(request: Request):
         if messages:
             message = messages[0]
             from_number = message["from"]
-            text = message.get("text", {}).get("body", "").strip().lower()
+            text = message.get("text", {}).get("body", "")
+            text = text.strip().lower()
             if text == "hi":
                 await send_template_message(from_number, "hello_world")
     except Exception as e:
