@@ -2,6 +2,7 @@ from fastapi import APIRouter, Request, status, Query, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 import os
 import httpx
+import json
 
 router = APIRouter()
 
@@ -42,7 +43,7 @@ async def send_template_message(to: str, template_name: str):
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request):
     payload = await request.json()
-    print("Incoming JSON payload:", payload, flush=True)
+    print("Incoming JSON payload:", (json.dumps(payload, indent=2)), flush=True)
     # WhatsApp webhook structure
     try:
         entry = payload["entry"][0]
