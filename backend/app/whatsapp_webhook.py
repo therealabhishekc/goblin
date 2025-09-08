@@ -39,7 +39,7 @@ async def send_template_message(to: str, template_name: str):
         response.raise_for_status()
         return response.json()
 
-@router.post("/webhook/whatsapp")
+@router.post("/webhook")
 async def whatsapp_webhook(request: Request):
     payload = await request.json()
     # WhatsApp webhook structure
