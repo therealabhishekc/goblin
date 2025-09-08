@@ -42,6 +42,7 @@ async def send_template_message(to: str, template_name: str):
 @router.post("/webhook")
 async def whatsapp_webhook(request: Request):
     payload = await request.json()
+    print("Incoming JSON payload:", payload, flush=True)
     # WhatsApp webhook structure
     try:
         entry = payload["entry"][0]
@@ -56,5 +57,6 @@ async def whatsapp_webhook(request: Request):
             if text == "hi":
                 await send_template_message(from_number, "hello_world")
     except Exception as e:
+        print("Webhook error:", e, flush=True)
         return JSONResponse(content={"error": str(e)}, status_code=status.HTTP_400_BAD_REQUEST)
     return JSONResponse(content={"status": "received"}, status_code=status.HTTP_200_OK)
