@@ -4,7 +4,7 @@ import os
 
 router = APIRouter()
 
-VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "your_verify_token")
+VERIFY_TOKEN = os.getenv("MYTOKEN")
 
 @router.get("/webhook", response_class=PlainTextResponse)
 def verify(
