@@ -4,9 +4,9 @@ runtime: python311
 build:
   commands:
     build:
-      - echo "Starting build process..."
-      - echo "Current directory: $(pwd)"
-      - echo "Listing files: $(ls -la)"
+      - echo "Starting build process"
+      - pwd
+      - ls -la
       - python3 -m pip install --upgrade pip
       - python3 -m pip install --no-cache-dir -r requirements.txt
 
