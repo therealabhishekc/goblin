@@ -4,11 +4,14 @@ runtime: python311
 build:
   commands:
     build:
-      - python -m pip install -U pip wheel setuptools
-      - python -m pip install --no-cache-dir -r requirements.txt
+      - echo "Starting build process..."
+      - echo "Current directory: $(pwd)"
+      - echo "Listing files: $(ls -la)"
+      - python3 -m pip install --upgrade pip
+      - python3 -m pip install --no-cache-dir -r requirements.txt
 
 run:
-  command: gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+  command: python3 -m gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
   network:
     port: 8000
     env: PORT
