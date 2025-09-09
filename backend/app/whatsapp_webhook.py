@@ -10,7 +10,7 @@ router = APIRouter()
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+REDIS_URL = os.getenv("REDISCLOUD_URL", "redis://localhost:6379/0")
 
 r = redis.Redis.from_url(REDIS_URL)
 
