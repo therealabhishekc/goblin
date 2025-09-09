@@ -42,10 +42,12 @@ async def whatsapp_webhook(request: Request):
                 return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
             r.setex(message_id, 86400, "1")  # 24 hours
             from_number = message["from"]
-            text = message.get("text", {}).get("body", "")
-            text = text.strip().lower()
-            if text == "hi":
-                await send_template_message(from_number, "hello_world")
+            # Only process if message type is 'text' and body is not empty
+            if message.get("type") == "text":
+                text = message.get("text", {}).get("body", "")
+                text = text.strip().lower()
+                if text == "hi":
+                    await send_template_message(from_number, "hello_world")
     except Exception as e:
         print("Webhook error:", e, flush=True)
         return JSONResponse(content={"error": str(e)}, status_code=status.HTTP_400_BAD_REQUEST)
