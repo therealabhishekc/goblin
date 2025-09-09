@@ -7,11 +7,14 @@ build:
       - echo "Starting build process"
       - pwd
       - ls -la
+      - python3 --version
       - python3 -m pip install --upgrade pip
       - python3 -m pip install --no-cache-dir -r requirements.txt
+      - echo "Installed packages:"
+      - python3 -m pip list
 
 run:
-  command: python3 -m gunicorn -k uvicorn.workers.UvicornWorker app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+  command: gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 120 --log-level info
   network:
     port: 8000
     env: PORT
