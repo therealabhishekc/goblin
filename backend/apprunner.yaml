@@ -15,7 +15,7 @@ runtime: python3
 # The run command for your service
 run:
   runtime-version: python3
-  commands:
+  command:
     web: gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
 
 # Environment variables (optional, you can also set these in the App Runner console)
