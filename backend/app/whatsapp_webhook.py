@@ -50,8 +50,8 @@ async def whatsapp_webhook(request: Request):
         if r.get(message_id):
             print(f"Duplicate message detected: {message_id}", flush=True)
             return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
-            
-        r.setex(message_id, 86400, "1")  # 24 hours
+
+        r.setex(message_id, 21600, "1")  # 6 hours
         from_number = message["from"]
         
         # Only process if message type is 'text' and body is not empty
