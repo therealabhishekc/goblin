@@ -30,24 +30,39 @@ async def whatsapp_webhook(request: Request):
         entry = payload["entry"][0]
         changes = entry["changes"][0]
         value = changes["value"]
+        
+        # Only process if this is a message event (not status update)
+        if "messages" not in value:
+            print("Ignoring non-message event", flush=True)
+            return JSONResponse(content={"status": "ignored"}, status_code=status.HTTP_200_OK) 
+            
         messages = value.get("messages", [])
-        if messages:
-            message = messages[0]
-            message_id = message.get("id")
-            if not message_id:
-                return JSONResponse(content={"status": "no_message_id"}, status_code=status.HTTP_200_OK)
-            # Check Redis for deduplication (24 hour TTL)
-            if r.get(message_id):
-                print(f"Duplicate message detected: {message_id}", flush=True)
-                return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
-            r.setex(message_id, 86400, "1")  # 24 hours
-            from_number = message["from"]
-            # Only process if message type is 'text' and body is not empty
-            if message.get("type") == "text":
-                text = message.get("text", {}).get("body", "")
+        if not messages:
+            print("No messages in payload", flush=True)
+            return JSONResponse(content={"status": "no_messages"}, status_code=status.HTTP_200_OK)
+            
+        message = messages[0]
+        message_id = message.get("id")
+        if not message_id:
+            return JSONResponse(content={"status": "no_message_id"}, status_code=status.HTTP_200_OK)
+            
+        # Check Redis for deduplication (24 hour TTL)
+        if r.get(message_id):
+            print(f"Duplicate message detected: {message_id}", flush=True)
+            return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
+            
+        r.setex(message_id, 86400, "1")  # 24 hours
+        from_number = message["from"]
+        
+        # Only process if message type is 'text' and body is not empty
+        if message.get("type") == "text":
+            text = message.get("text", {}).get("body", "")
+            if text and text.strip():  # Ensure text is not empty
                 text = text.strip().lower()
                 if text == "hi":
                     await send_template_message(from_number, "hello_world")
+            else:
+                print("Empty text message, ignoring", flush=True)
     except Exception as e:
         print("Webhook error:", e, flush=True)
         return JSONResponse(content={"error": str(e)}, status_code=status.HTTP_400_BAD_REQUEST)
