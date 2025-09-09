@@ -1,22 +1,23 @@
 version: 1.0
-runtime: docker
+runtime: python311
 
 build:
   commands:
-    build: |
-      echo "Build starting on `date`"
-      echo "Building Docker image..."
+    build:
+      - python -m pip install -U pip wheel setuptools
+      - python -m pip install --no-cache-dir -r backend/requirements.txt
 
 run:
-  runtime-version: latest
-  commands:
-    web: gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
-
-# Environment variables (optional, you can also set these in the App Runner console)
-environment:
-  WHATSAPP_TOKEN: EAAI0TVNv9lwBPRve8mxF7KxvIZBD3y3YPZCqErOlrs5T5j2fn7xFZA8PIsufqiWKqXsvFDsqEy2kPChEu5QbLY564Hq7R3npLNW9gRUTbXA7pSKZCDDuyZAMQ55rWTNE2nSEVQNMJ5ZA9JrFOyB6moGzYihjHELzah3oSBtkrNRH6XkElLRnuJFx1rbNHbvUDHs2JzGxhlBVcKVQZCNr3MXvUyRwIErZAVtw4clhvvAOlm6uKQZDZD
-  VERIFY_TOKEN: goblinhut
-  PHONE_NUMBER_ID: 690297360830875
-  REDISCLOUD_URL: redis://default:GbwiAodvyys0ddq7re9VxLituXKsMh8X@redis-16553.c81.us-east-1-2.ec2.redns.redis-cloud.com:16553
-
-# You can remove or update the environment section as needed.
+  command: gunicorn -k uvicorn.workers.UvicornWorker backend.app.main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+  network:
+    port: 8000
+    env: PORT
+  env:
+    - name: WHATSAPP_TOKEN
+      value: EAAI0TVNv9lwBPRve8mxF7KxvIZBD3y3YPZCqErOlrs5T5j2fn7xFZA8PIsufqiWKqXsvFDsqEy2kPChEu5QbLY564Hq7R3npLNW9gRUTbXA7pSKZCDDuyZAMQ55rWTNE2nSEVQNMJ5ZA9JrFOyB6moGzYihjHELzah3oSBtkrNRH6XkElLRnuJFx1rbNHbvUDHs2JzGxhlBVcKVQZCNr3MXvUyRwIErZAVtw4clhvvAOlm6uKQZDZD
+    - name: VERIFY_TOKEN
+      value: goblinhut
+    - name: PHONE_NUMBER_ID
+      value: "690297360830875"
+    - name: REDISCLOUD_URL
+      value: redis://default:GbwiAodvyys0ddq7re9VxLituXKsMh8X@redis-16553.c81.us-east-1-2.ec2.redns.redis-cloud.com:16553
