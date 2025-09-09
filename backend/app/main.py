@@ -7,7 +7,7 @@ app = FastAPI()
 
 @app.get("/health")
 def health_check():
-	return JSONResponse(content={"status": "ok"})
+	return JSONResponse(content={"status": "ok"}, status_code=200)
 
 app.include_router(websocket_router)
 app.include_router(whatsapp_router)
