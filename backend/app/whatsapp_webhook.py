@@ -1,3 +1,4 @@
+import redis
 from fastapi import APIRouter, Request, status, Query, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 import os
@@ -9,6 +10,9 @@ router = APIRouter()
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+r = redis.Redis.from_url(REDIS_URL)
 
 @router.get("/webhook", response_class=PlainTextResponse)
 def verify(
@@ -52,6 +56,14 @@ async def whatsapp_webhook(request: Request):
         messages = value.get("messages", [])
         if messages:
             message = messages[0]
+            message_id = message.get("id")
+            if not message_id:
+                return JSONResponse(content={"status": "no_message_id"}, status_code=status.HTTP_200_OK)
+            # Check Redis for deduplication (24 hour TTL)
+            if r.get(message_id):
+                print(f"Duplicate message detected: {message_id}", flush=True)
+                return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
+            r.setex(message_id, 86400, "1")  # 24 hours
             from_number = message["from"]
             text = message.get("text", {}).get("body", "")
             text = text.strip().lower()
