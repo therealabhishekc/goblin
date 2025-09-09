@@ -1,0 +1,22 @@
+version: 1.0
+
+# AWS App Runner configuration file
+
+runtime: python3
+
+build:
+  commands:
+    - pip install --no-cache-dir -r requirements.txt
+
+run:
+  command: gunicorn app.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000
+  network:
+    port: 8000
+
+# You can set environment variables in the App Runner console UI
+# or add them here under 'environment':
+# environment:
+#   WHATSAPP_TOKEN: <your_token>
+#   VERIFY_TOKEN: <your_token>
+#   PHONE_NUMBER_ID: <your_id>
+#   REDISCLOUD_URL: <your_redis_url>
