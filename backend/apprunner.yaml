@@ -10,11 +10,15 @@ build:
       - python3 --version
       - python3 -m pip install --upgrade pip
       - python3 -m pip install --no-cache-dir -r requirements.txt
+      - echo "Verifying gunicorn installation:"
+      - python3 -m pip show gunicorn
+      - echo "Testing gunicorn command:"
+      - python3 -m gunicorn --version
       - echo "Installed packages:"
       - python3 -m pip list
 
 run:
-  command: gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 120 --log-level info
+  command: python3 -m gunicorn app.main:app -w 2 -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:8000 --timeout 120 --log-level info
   network:
     port: 8000
     env: PORT
