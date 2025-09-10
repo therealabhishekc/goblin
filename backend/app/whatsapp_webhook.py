@@ -46,12 +46,17 @@ async def whatsapp_webhook(request: Request):
         if not message_id:
             return JSONResponse(content={"status": "no_message_id"}, status_code=status.HTTP_200_OK)
             
-        # Check Redis for deduplication (24 hour TTL)
-        if r.get(message_id):
+        # Check Redis for deduplication (24 hour TTL) - only if Redis is available
+        if r and r.get(message_id):
             print(f"Duplicate message detected: {message_id}", flush=True)
             return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
 
-        r.setex(message_id, 21600, "1")  # 6 hours
+        # Store message ID in Redis if available
+        if r:
+            try:
+                r.setex(message_id, 21600, "1")  # 6 hours
+            except Exception as e:
+                print(f"Redis operation failed: {e}", flush=True)
         from_number = message["from"]
         
         # Only process if message type is 'text' and body is not empty
