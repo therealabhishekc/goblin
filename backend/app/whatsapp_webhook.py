@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request, status, Query, HTTPException
 from fastapi.responses import JSONResponse, PlainTextResponse
 import os
 import json
-from app.redis_client import r
+from app.dynamodb_client import store_message_id, check_message_exists
 from app.whatsapp_api import send_template_message
 
 router = APIRouter()
@@ -46,17 +46,16 @@ async def whatsapp_webhook(request: Request):
         if not message_id:
             return JSONResponse(content={"status": "no_message_id"}, status_code=status.HTTP_200_OK)
             
-        # Check Redis for deduplication (24 hour TTL) - only if Redis is available
-        if r and r.get(message_id):
+        # Check DynamoDB for deduplication - only if DynamoDB is available
+        if check_message_exists(message_id):
             print(f"Duplicate message detected: {message_id}", flush=True)
             return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
 
-        # Store message ID in Redis if available
-        if r:
-            try:
-                r.setex(message_id, 21600, "1")  # 6 hours
-            except Exception as e:
-                print(f"Redis operation failed: {e}", flush=True)
+        # Store message ID in DynamoDB if available
+        if store_message_id(message_id, ttl_hours=6):
+            print(f"Message ID stored in DynamoDB: {message_id}", flush=True)
+        else:
+            print(f"Failed to store message ID in DynamoDB: {message_id}", flush=True)
         from_number = message["from"]
         
         # Only process if message type is 'text' and body is not empty
