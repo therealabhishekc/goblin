@@ -12,9 +12,9 @@ VERIFY_TOKEN = os.getenv("VERIFY_TOKEN")
 
 @router.get("/webhook", response_class=PlainTextResponse)
 def verify(
-    hub_mode: str | None = Query(None, alias="hub.mode"),
-    hub_challenge: str | None = Query(None, alias="hub.challenge"),
-    hub_verify_token: str | None = Query(None, alias="hub.verify_token"),
+    hub_mode: str = Query(None, alias="hub.mode"),
+    hub_challenge: str = Query(None, alias="hub.challenge"),
+    hub_verify_token: str = Query(None, alias="hub.verify_token"),
 ):
     if hub_mode == "subscribe" and hub_verify_token == VERIFY_TOKEN:
         return hub_challenge or ""
