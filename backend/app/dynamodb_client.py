@@ -28,7 +28,7 @@ def store_message_id(message_id, ttl_hours=6):
         
         table.put_item(
             Item={
-                'message_id': message_id,
+                'msgid': message_id,
                 'created_at': datetime.utcnow().isoformat(),
                 'ttl': ttl_timestamp
             }
@@ -45,7 +45,7 @@ def check_message_exists(message_id):
     
     try:
         response = table.get_item(
-            Key={'message_id': message_id}
+            Key={'msgid': message_id}
         )
         return 'Item' in response
     except Exception as e:
