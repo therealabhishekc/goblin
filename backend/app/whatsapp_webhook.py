@@ -1,10 +1,13 @@
 
-from fastapi import APIRouter, Request, status, Query, HTTPException
+from fastapi import APIRouter, Request, status, Query, HTTPException, Depends
 from fastapi.responses import JSONResponse, PlainTextResponse
+from sqlalchemy.orm import Session
 import os
 import json
 from app.dynamodb_client import store_message_id, check_message_exists
 from app.whatsapp_api import send_template_message
+from app.services.whatsapp_service import WhatsAppService
+from app.database.connection import get_database_session
 
 router = APIRouter()
 
@@ -22,11 +25,37 @@ def verify(
 
 
 @router.post("/webhook")
-async def whatsapp_webhook(request: Request):
+async def whatsapp_webhook(
+    request: Request, 
+    db: Session = Depends(get_database_session)
+):
+    """
+    Enhanced webhook handler using PostgreSQL and repository pattern.
+    Now stores user profiles, messages, and analytics data.
+    """
     payload = await request.json()
     print("Incoming JSON payload:", (json.dumps(payload, indent=2)), flush=True)
-    # WhatsApp webhook structure
+    
     try:
+        # Process with new service layer
+        with WhatsAppService(db) as service:
+            result = service.process_incoming_message(payload)
+            
+            if result["status"] == "error":
+                print(f"Service error: {result['message']}", flush=True)
+                return JSONResponse(
+                    content={"status": "error", "message": result["message"]}, 
+                    status_code=status.HTTP_400_BAD_REQUEST
+                )
+            
+            if result["status"] == "duplicate":
+                print(f"Duplicate message detected via PostgreSQL: {result.get('message_id')}", flush=True)
+                return JSONResponse(
+                    content={"status": "duplicate"}, 
+                    status_code=status.HTTP_200_OK
+                )
+        
+        # Legacy WhatsApp webhook structure for backward compatibility
         entry = payload["entry"][0]
         changes = entry["changes"][0]
         value = changes["value"]
@@ -43,31 +72,34 @@ async def whatsapp_webhook(request: Request):
             
         message = messages[0]
         message_id = message.get("id")
-        if not message_id:
-            return JSONResponse(content={"status": "no_message_id"}, status_code=status.HTTP_200_OK)
-            
-        # Check DynamoDB for deduplication - only if DynamoDB is available
-        if check_message_exists(message_id):
-            print(f"Duplicate message detected: {message_id}", flush=True)
-            return JSONResponse(content={"status": "duplicate"}, status_code=status.HTTP_200_OK)
-
-        # Store message ID in DynamoDB if available
-        if store_message_id(message_id, ttl_hours=6):
-            print(f"Message ID stored in DynamoDB: {message_id}", flush=True)
-        else:
-            print(f"Failed to store message ID in DynamoDB: {message_id}", flush=True)
         from_number = message["from"]
         
-        # Only process if message type is 'text' and body is not empty
+        # Store in DynamoDB for fast deduplication (keep for performance)
+        if message_id and store_message_id(message_id, ttl_hours=6):
+            print(f"Message ID stored in DynamoDB for fast lookup: {message_id}", flush=True)
+        
+        # Business logic for automated responses
         if message.get("type") == "text":
             text = message.get("text", {}).get("body", "")
-            if text and text.strip():  # Ensure text is not empty
+            if text and text.strip():
                 text = text.strip().lower()
                 if text == "hi":
                     await send_template_message(from_number, "hello_world")
+                    # Update analytics for sent response
+                    with WhatsAppService(get_database_session()) as analytics_service:
+                        analytics_service.analytics_repo.increment_responses_sent()
             else:
                 print("Empty text message, ignoring", flush=True)
+                
+        print(f"✅ Message processed successfully: {message_id}", flush=True)
+        return JSONResponse(
+            content={
+                "status": "success", 
+                "message": "Message processed and stored in PostgreSQL"
+            }, 
+            status_code=status.HTTP_200_OK
+        )
+            
     except Exception as e:
         print("Webhook error:", e, flush=True)
         return JSONResponse(content={"error": str(e)}, status_code=status.HTTP_400_BAD_REQUEST)
-    return JSONResponse(content={"status": "received"}, status_code=status.HTTP_200_OK)

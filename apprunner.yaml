@@ -15,13 +15,15 @@ run:
       PORT: 8000
   env:
     - name: DYNAMODB_TABLE_NAME
-      value: ttest
+      value: whatsapp-dedup-prod
     - name: AWS_REGION
       value: us-east-1
+    - name: DATABASE_URL
+      value: postgresql://postgres:your_password@your-rds-endpoint:5432/whatsapp_business
     # Add your other environment variables here:
     # - name: VERIFY_TOKEN
     #   value: your_verify_token
-    # - name: WHATSAPP_ACCESS_TOKEN
+    # - name: WHATSAPP_TOKEN
     #   value: your_whatsapp_token
     # - name: WHATSAPP_PHONE_NUMBER_ID
     #   value: your_phone_number_id

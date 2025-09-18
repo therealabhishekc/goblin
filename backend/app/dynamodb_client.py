@@ -3,9 +3,16 @@ import os
 from datetime import datetime, timedelta
 from botocore.exceptions import ClientError
 
-# DynamoDB configuration
-TABLE_NAME = os.getenv("DYNAMODB_TABLE_NAME", "ttest")
-AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+# Get configuration
+try:
+    from app.config import get_settings
+    settings = get_settings()
+    TABLE_NAME = settings.dynamodb_table_name
+    AWS_REGION = settings.aws_region
+except ImportError:
+    # Fallback to environment variables
+    TABLE_NAME = os.getenv("DYNAMODB_TABLE_NAME", "whatsapp-dedup-dev")
+    AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 
 # Initialize DynamoDB client
 try:
