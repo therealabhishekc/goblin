@@ -1,0 +1,25 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "rds-db:connect"
+            ],
+            "Resource": [
+                "arn:aws:rds-db:*:*:dbuser:whatsapp-postgres-*/app_user"
+            ],
+            "Condition": {
+                "StringEquals": {
+                    "aws:RequestedRegion": "us-east-1"
+                },
+                "DateGreaterThan": {
+                    "aws:CurrentTime": "2024-01-01T00:00:00Z"
+                },
+                "IpAddress": {
+                    "aws:SourceIp": ["10.0.0.0/16"]
+                }
+            }
+        }
+    ]
+}

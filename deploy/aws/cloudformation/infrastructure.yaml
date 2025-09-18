@@ -1,0 +1,554 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'WhatsApp Business API Infrastructure - Complete serverless stack with RDS, DynamoDB, S3, and App Runner'
+
+# ================================
+# PARAMETERS
+# ================================
+Parameters:
+  Environment:
+    Type: String
+    Default: development
+    AllowedValues: [development, staging, production]
+    Description: Environment name (affects resource sizing and configuration)
+  
+  WhatsAppToken:
+    Type: String
+    NoEcho: true
+    Description: WhatsApp Business API Token from Meta Developer Console
+  
+  VerifyToken:
+    Type: String
+    NoEcho: true
+    Description: WhatsApp Webhook Verify Token for webhook validation
+
+# ================================
+# CONDITIONS
+# ================================
+Conditions:
+  IsProduction: !Equals [!Ref Environment, 'production']
+  IsStaging: !Equals [!Ref Environment, 'staging']
+  IsDevelopment: !Equals [!Ref Environment, 'development']
+
+Resources:
+  # ================================
+  # LOGGING & MONITORING
+  # ================================
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/apprunner/whatsapp-api-${Environment}'
+      RetentionInDays: !If [IsProduction, 30, 7]
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+
+  # ================================
+  # DATA STORAGE
+  # ================================
+  
+  # DynamoDB Table for Message Deduplication
+  MessageDeduplicationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'whatsapp-dedup-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: msgid
+          AttributeType: S
+      KeySchema:
+        - AttributeName: msgid
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Message-Deduplication
+
+  # S3 Bucket for Data Storage and Archival
+  WhatsAppDataBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'whatsapp-data-${Environment}-${AWS::AccountId}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      LifecycleConfiguration:
+        Rules:
+          - Id: WhatsAppDataLifecycle
+            Status: Enabled
+            Prefix: messages/
+            Transitions:
+              - TransitionInDays: 90
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 365
+                StorageClass: GLACIER
+              - TransitionInDays: 2555  # 7 years
+                StorageClass: DEEP_ARCHIVE
+            ExpirationInDays: 3650  # 10 years for compliance
+          - Id: MediaLifecycle
+            Status: Enabled
+            Prefix: media/
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: STANDARD_IA
+              - TransitionInDays: 180
+                StorageClass: GLACIER
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Data-Storage-Archive
+
+  # ================================
+  # NETWORKING
+  # ================================
+  
+  # Virtual Private Cloud
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-vpc-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-igw-${Environment}'
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets (for NAT Gateways if needed)
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-public-subnet-1-${Environment}'
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-public-subnet-2-${Environment}'
+
+  # Private Subnets (for RDS)
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-private-subnet-1-${Environment}'
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.4.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-private-subnet-2-${Environment}'
+
+  # Route Table for Public Subnets
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-public-rt-${Environment}'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # ================================
+  # SECURITY GROUPS
+  # ================================
+  
+  # Security Group for App Runner (outbound traffic)
+  AppRunnerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'whatsapp-apprunner-sg-${Environment}'
+      GroupDescription: Security group for App Runner - allows outbound traffic
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Allow all outbound traffic
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-apprunner-sg-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Security Group for RDS (inbound from App Runner only)
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'whatsapp-rds-sg-${Environment}'
+      GroupDescription: Security group for RDS PostgreSQL - allows access from App Runner only
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref AppRunnerSecurityGroup
+          Description: PostgreSQL access from App Runner
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-rds-sg-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # ================================
+  # DATABASE
+  # ================================
+  
+  # RDS Subnet Group
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupName: !Sub 'whatsapp-db-subnet-group-${Environment}'
+      DBSubnetGroupDescription: Subnet group for WhatsApp RDS PostgreSQL
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-db-subnet-group-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # RDS PostgreSQL Database
+  PostgreSQLDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBInstanceIdentifier: !Sub 'whatsapp-postgres-${Environment}'
+      DBName: !Sub 'whatsapp_business_${Environment}'
+      Engine: postgres
+      EngineVersion: '15.4'
+      DBInstanceClass: !If [IsProduction, db.t3.small, db.t3.micro]
+      AllocatedStorage: !If [IsProduction, 100, 20]
+      StorageType: gp2
+      MasterUsername: postgres
+      ManageMasterUserPassword: true
+      MasterUserSecret:
+        Description: !Sub 'Master password for ${Environment} PostgreSQL database'
+        SecretStringTemplate: '{"username": "postgres"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+      EnableIAMDatabaseAuthentication: true
+      VPCSecurityGroups:
+        - !Ref DBSecurityGroup
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      BackupRetentionPeriod: !If [IsProduction, 30, 7]
+      MultiAZ: !If [IsProduction, true, false]
+      PubliclyAccessible: false
+      StorageEncrypted: true
+      DeletionProtection: !If [IsProduction, true, false]
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-postgres-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+
+  # ================================
+  # IAM ROLES & POLICIES
+  # ================================
+  
+  # IAM Role for App Runner Service
+  AppRunnerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'AppRunnerWhatsAppRole-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: tasks.apprunner.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                Resource: !GetAtt MessageDeduplicationTable.Arn
+        - PolicyName: RDSIAMAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - rds-db:connect
+                Resource: !Sub 'arn:aws:rds-db:${AWS::Region}:${AWS::AccountId}:dbuser:${PostgreSQLDB}/app_user'
+                Condition:
+                  StringEquals:
+                    aws:RequestedRegion: !Ref AWS::Region
+        - PolicyName: S3DataAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:GetObjectVersion
+                Resource: !Sub '${WhatsAppDataBucket}/*'
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:GetBucketLocation
+                Resource: !Ref WhatsAppDataBucket
+        - PolicyName: CloudWatchLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                  - logs:DescribeLogStreams
+                Resource: !Sub '${ApplicationLogGroup}:*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+
+  # ================================
+  # APP RUNNER & VPC CONNECTOR
+  # ================================
+  
+  # VPC Connector for App Runner
+  AppRunnerVPCConnector:
+    Type: AWS::AppRunner::VpcConnector
+    Properties:
+      VpcConnectorName: !Sub 'whatsapp-vpc-connector-${Environment}'
+      Subnets:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroups:
+        - !Ref AppRunnerSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-vpc-connector-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+
+  # App Runner Service
+  WhatsAppAppRunner:
+    Type: AWS::AppRunner::Service
+    DependsOn: 
+      - PostgreSQLDB
+      - WhatsAppDataBucket
+      - AppRunnerVPCConnector
+    Properties:
+      ServiceName: !Sub 'whatsapp-api-${Environment}'
+      SourceConfiguration:
+        ImageRepository:
+          ImageIdentifier: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/whatsapp-api:latest'
+          ImageConfiguration:
+            Port: 8000
+            RuntimeEnvironmentVariables:
+              # Environment Configuration
+              ENVIRONMENT: !Ref Environment
+              AWS_REGION: !Ref AWS::Region
+              LOG_LEVEL: !If [IsProduction, 'INFO', 'DEBUG']
+              
+              # Database Configuration
+              DATABASE_URL: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}'
+              DB_HOST: !GetAtt PostgreSQLDB.Endpoint.Address
+              DB_PORT: !GetAtt PostgreSQLDB.Endpoint.Port
+              DB_NAME: !Sub 'whatsapp_business_${Environment}'
+              DB_USER: 'app_user'
+              USE_IAM_AUTH: 'true'
+              
+              # WhatsApp API Configuration
+              WHATSAPP_TOKEN: !Ref WhatsAppToken
+              VERIFY_TOKEN: !Ref VerifyToken
+              
+              # AWS Services Configuration
+              S3_DATA_BUCKET: !Ref WhatsAppDataBucket
+              DYNAMODB_TABLE: !Ref MessageDeduplicationTable
+          ImageRepositoryType: ECR
+        AutoDeploymentsEnabled: false
+      InstanceConfiguration:
+        Cpu: !If [IsProduction, '1 vCPU', '0.25 vCPU']
+        Memory: !If [IsProduction, '2 GB', '0.5 GB']
+        InstanceRoleArn: !GetAtt AppRunnerRole.Arn
+      HealthCheckConfiguration:
+        Protocol: HTTP
+        Path: /health
+        Interval: 30
+        Timeout: 5
+        HealthyThreshold: 2
+        UnhealthyThreshold: 5
+      NetworkConfiguration:
+        EgressConfiguration:
+          EgressType: VPC
+          VpcConnectorArn: !Ref AppRunnerVPCConnector
+      Tags:
+        - Key: Name
+          Value: !Sub 'whatsapp-api-${Environment}'
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+
+# ================================
+# OUTPUTS
+# ================================
+Outputs:
+  # Application Endpoints
+  AppRunnerServiceUrl:
+    Description: App Runner Service URL for WhatsApp webhook
+    Value: !Sub 'https://${WhatsAppAppRunner.ServiceUrl}'
+    Export:
+      Name: !Sub '${AWS::StackName}-AppRunnerServiceUrl'
+  
+  AppRunnerServiceArn:
+    Description: App Runner Service ARN
+    Value: !Ref WhatsAppAppRunner
+    Export:
+      Name: !Sub '${AWS::StackName}-AppRunnerServiceArn'
+
+  # Database Information
+  DatabaseEndpoint:
+    Description: RDS PostgreSQL endpoint for IAM authentication
+    Value: !GetAtt PostgreSQLDB.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseEndpoint'
+
+  DatabasePort:
+    Description: RDS PostgreSQL port
+    Value: !GetAtt PostgreSQLDB.Endpoint.Port
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabasePort'
+
+  DatabaseName:
+    Description: PostgreSQL database name
+    Value: !Sub 'whatsapp_business_${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-DatabaseName'
+
+  # Storage Resources
+  S3DataBucket:
+    Description: S3 bucket for data storage and archival
+    Value: !Ref WhatsAppDataBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-S3DataBucket'
+
+  DynamoDBTableName:
+    Description: DynamoDB table name for message deduplication
+    Value: !Ref MessageDeduplicationTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTable'
+
+  # Infrastructure Resources
+  VPCId:
+    Description: VPC ID for the WhatsApp infrastructure
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC'
+
+  VPCConnectorArn:
+    Description: VPC Connector ARN for App Runner
+    Value: !Ref AppRunnerVPCConnector
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCConnectorArn'
+
+  AppRunnerRoleArn:
+    Description: IAM Role ARN for App Runner service
+    Value: !GetAtt AppRunnerRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AppRunnerRole'
+
+  LogGroupName:
+    Description: CloudWatch Log Group for application logs
+    Value: !Ref ApplicationLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroup'
+
+  # Environment Summary
+  EnvironmentSummary:
+    Description: Summary of environment-specific configurations
+    Value: !Sub |
+      Environment: ${Environment}
+      App Runner URL: https://${WhatsAppAppRunner.ServiceUrl}
+      Database: whatsapp_business_${Environment} (${PostgreSQLDB.DBInstanceClass})
+      DynamoDB Table: ${MessageDeduplicationTable}
+      S3 Bucket: ${WhatsAppDataBucket}
+      Multi-AZ Database: ${PostgreSQLDB.MultiAZ}
+      Backup Retention: ${PostgreSQLDB.BackupRetentionPeriod} days
+      Log Retention: ${ApplicationLogGroup.RetentionInDays} days

@@ -1,0 +1,89 @@
+wa-app/
+├── README.md                           # Project documentation
+├── .gitignore                         
+├── apprunner.yaml                     # App Runner config
+├── docker-compose.yml                # Local development (optional)
+├── Dockerfile                        # Container config (optional)
+│
+├── deploy/                           # Deployment files
+│   ├── aws/
+│   │   ├── iam/
+│   │   │   ├── dynamodb-policy.json
+│   │   │   └── trust-policy.json
+│   │   ├── cloudformation/           # Infrastructure as Code
+│   │   │   └── infrastructure.yaml
+│   │   └── scripts/
+│   │       └── setup-aws-resources.sh
+│   ├── environments/
+│   │   ├── development.env
+│   │   ├── staging.env
+│   │   └── production.env
+│   └── DEPLOYMENT_GUIDE.md
+│
+├── backend/                          # Python application
+│   ├── .env                         # Local development env
+│   ├── requirements.txt             
+│   ├── requirements-dev.txt         # Development dependencies
+│   ├── Procfile                     # App Runner process file
+│   │
+│   ├── app/                         # Main application
+│   │   ├── __init__.py
+│   │   ├── main.py                  # FastAPI app entry point
+│   │   ├── config.py                # Configuration management
+│   │   │
+│   │   ├── core/                    # Core functionality
+│   │   │   ├── __init__.py
+│   │   │   ├── database.py          # Database connections
+│   │   │   ├── logging.py           # Logging setup
+│   │   │   └── exceptions.py        # Custom exceptions
+│   │   │
+│   │   ├── models/                  # Data models
+│   │   │   ├── __init__.py
+│   │   │   ├── whatsapp.py          # WhatsApp models
+│   │   │   ├── user.py             # User models
+│   │   │   └── business.py         # Business models
+│   │   │
+│   │   ├── api/                     # API routes
+│   │   │   ├── __init__.py
+│   │   │   ├── health.py            # Health checks
+│   │   │   ├── webhook.py           # WhatsApp webhook
+│   │   │   └── websocket.py         # WebSocket endpoints
+│   │   │
+│   │   ├── services/                # Business logic
+│   │   │   ├── __init__.py
+│   │   │   ├── whatsapp_service.py  # WhatsApp operations
+│   │   │   ├── user_service.py      # User management
+│   │   │   └── message_service.py   # Message processing
+│   │   │
+│   │   ├── repositories/            # Data access layer
+│   │   │   ├── __init__.py
+│   │   │   ├── dynamodb_repo.py     # DynamoDB operations
+│   │   │   └── base_repo.py         # Base repository
+│   │   │
+│   │   └── utils/                   # Utilities
+│   │       ├── __init__.py
+│   │       ├── validators.py        # Input validation
+│   │       ├── formatters.py        # Data formatting
+│   │       └── constants.py         # Application constants
+│   │
+│   └── tests/                       # Test files
+│       ├── __init__.py
+│       ├── conftest.py              # Test configuration
+│       ├── test_webhook.py          # Webhook tests
+│       ├── test_services.py         # Service tests
+│       └── test_models.py           # Model tests
+│
+├── docs/                            # Documentation
+│   ├── api.md                       # API documentation
+│   ├── architecture.md             # System architecture
+│   └── development.md              # Development guide
+│
+├── scripts/                         # Utility scripts
+│   ├── start_dev.sh                # Development startup
+│   ├── run_tests.sh                # Test runner
+│   └── deploy.sh                   # Deployment script
+│
+└── .github/                        # GitHub Actions (optional)
+    └── workflows/
+        ├── test.yml                # Automated testing
+        └── deploy.yml              # Automated deployment
