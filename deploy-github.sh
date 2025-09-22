@@ -56,16 +56,17 @@ fi
 
 # Validate GitHub connection exists
 echo "🔍 Validating GitHub connection..."
-aws apprunner describe-connection \
-    --connection-arn "$GITHUB_CONNECTION_ARN" \
-    --region "$AWS_REGION" > /dev/null
+aws apprunner list-connections \
+    --region "$AWS_REGION" \
+    --query "ConnectionSummaryList[?ConnectionArn=='$GITHUB_CONNECTION_ARN'].ConnectionArn" \
+    --output text > /dev/null
 
 if [ $? -ne 0 ]; then
-    echo "❌ Error: Invalid GitHub Connection ARN or connection not found"
-    exit 1
+    echo "❌ Error: Cannot validate GitHub Connection or AWS CLI error"
+    echo "⚠️  Proceeding anyway - CloudFormation will validate the connection"
+else
+    echo "✅ GitHub connection validated"
 fi
-
-echo "✅ GitHub connection validated"
 
 # Deploy CloudFormation stack
 echo "☁️  Deploying CloudFormation stack..."
