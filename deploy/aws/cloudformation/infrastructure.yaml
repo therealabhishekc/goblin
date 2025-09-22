@@ -429,7 +429,7 @@ Resources:
             CodeConfigurationValues:
               Runtime: PYTHON_3
               BuildCommand: pip install -r backend/requirements.txt
-              StartCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
+              StartCommand: python backend/start.py
               Port: 8000  
               RuntimeEnvironmentVariables:
                 - Name: ENVIRONMENT
