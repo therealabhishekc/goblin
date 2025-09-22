@@ -11,9 +11,11 @@ run:
   command: uvicorn app.main:app --host 0.0.0.0 --port 8000
   network:
     port: 8000
-    env:
-      PORT: 8000
-      PYTHONPATH: /app/backend
+  env:
+    - name: PORT
+      value: "8000"
+    - name: PYTHONPATH
+      value: /app/backend
   # All environment variables are managed by CloudFormation
   # They are injected automatically during deployment:
   # - DATABASE_URL, DB_HOST, DB_PORT, DB_NAME, DB_USER, USE_IAM_AUTH
