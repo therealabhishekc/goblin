@@ -9,7 +9,7 @@ build:
       - echo "Python path setup complete"
 run:
   runtime-version: 3.12
-  command: PYTHONPATH=/app/backend python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+  command: python backend/start.py
   network:
     port: 8000
   env:
