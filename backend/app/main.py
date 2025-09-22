@@ -1,20 +1,30 @@
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+import asyncio
 
 from app.config import get_settings
 from app.core.database import init_database
 from app.core.logging import logger
 
 # API routers
-from app.api import health, webhook
+from app.api import health, webhook, messaging, monitoring
 try:
     from app.api import archive
 except ImportError:
     archive = None
 from app.api_endpoints import router as legacy_api_router
 
-# Database initialization
+# SQS Workers
+try:
+    from app.workers.message_processor import message_processor
+    SQS_ENABLED = True
+except ImportError:
+    message_processor = None
+    SQS_ENABLED = False
+    logger.warning("⚠️  SQS workers not available - running without message processing")
+
+# Database and workers initialization
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize application on startup"""
@@ -28,9 +38,34 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
     
+    # Start SQS message processor if available
+    processor_task = None
+    if SQS_ENABLED and message_processor:
+        try:
+            # Start message processor in background
+            processor_task = asyncio.create_task(message_processor.start())
+            logger.info("✅ SQS message processor started")
+        except Exception as e:
+            logger.error(f"❌ Failed to start message processor: {e}")
+    else:
+        logger.info("ℹ️  Running without SQS message processing")
+    
     yield
     
-    logger.info("🛑 Application shutdown")
+    # Shutdown
+    logger.info("🛑 Application shutdown initiated")
+    
+    # Stop message processor
+    if processor_task and not processor_task.done():
+        logger.info("🛑 Stopping message processor...")
+        await message_processor.stop()
+        processor_task.cancel()
+        try:
+            await processor_task
+        except asyncio.CancelledError:
+            logger.info("✅ Message processor stopped")
+    
+    logger.info("🛑 Application shutdown complete")
 
 # Create FastAPI application
 settings = get_settings()
@@ -45,6 +80,8 @@ app = FastAPI(
 # Include API routers
 app.include_router(health.router)
 app.include_router(webhook.router)
+app.include_router(messaging.router)
+app.include_router(monitoring.router)
 
 # Include archive router if available
 if archive:
@@ -76,6 +113,17 @@ async def root():
         "message": f"Welcome to {settings.app_name}",
         "version": settings.app_version,
         "status": "running",
-        "docs": "/docs",
-        "health": "/health"
+        "features": {
+            "sqs_queuing": SQS_ENABLED,
+            "message_processing": bool(message_processor),
+            "monitoring": True,
+            "async_messaging": True
+        },
+        "endpoints": {
+            "docs": "/docs",
+            "health": "/health",
+            "messaging": "/messaging",
+            "monitoring_dashboard": "/monitoring/dashboard",
+            "webhook": "/webhook"
+        }
     }

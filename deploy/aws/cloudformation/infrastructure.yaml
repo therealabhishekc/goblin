@@ -96,6 +96,109 @@ Resources:
         - Key: Purpose
           Value: Message-Deduplication
 
+  # ================================
+  # SQS QUEUES FOR MESSAGE PROCESSING
+  # ================================
+  
+  # Incoming WhatsApp Messages Queue
+  IncomingMessageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'whatsapp-incoming-${Environment}'
+      VisibilityTimeoutSeconds: 300  # 5 minutes for processing
+      MessageRetentionPeriod: 1209600  # 14 days
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IncomingMessageDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Incoming-Message-Processing
+
+  # Dead Letter Queue for Failed Incoming Messages
+  IncomingMessageDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'whatsapp-incoming-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Incoming-Message-DLQ
+
+  # Outgoing WhatsApp Messages Queue
+  OutgoingMessageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'whatsapp-outgoing-${Environment}'
+      VisibilityTimeoutSeconds: 60  # 1 minute for sending
+      MessageRetentionPeriod: 1209600  # 14 days
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt OutgoingMessageDLQ.Arn
+        maxReceiveCount: 3
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Outgoing-Message-Processing
+
+  # Dead Letter Queue for Failed Outgoing Messages
+  OutgoingMessageDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'whatsapp-outgoing-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Outgoing-Message-DLQ
+
+  # Analytics and Metrics Queue
+  AnalyticsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'whatsapp-analytics-${Environment}'
+      VisibilityTimeoutSeconds: 120  # 2 minutes for analytics processing
+      MessageRetentionPeriod: 1209600  # 14 days
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt AnalyticsDLQ.Arn
+        maxReceiveCount: 5  # More retries for analytics
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Analytics-Processing
+
+  # Dead Letter Queue for Failed Analytics
+  AnalyticsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'whatsapp-analytics-dlq-${Environment}'
+      MessageRetentionPeriod: 1209600  # 14 days
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: Analytics-DLQ
+
   # S3 Bucket for Data Storage and Archival
   WhatsAppDataBucket:
     Type: AWS::S3::Bucket
@@ -276,6 +379,25 @@ Resources:
                   - s3:ListBucket
                   - s3:GetBucketLocation
                 Resource: !GetAtt WhatsAppDataBucket.Arn
+        - PolicyName: SQSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  - sqs:GetQueueUrl
+                  - sqs:ChangeMessageVisibility
+                Resource:
+                  - !GetAtt IncomingMessageQueue.Arn
+                  - !GetAtt OutgoingMessageQueue.Arn
+                  - !GetAtt AnalyticsQueue.Arn
+                  - !GetAtt IncomingMessageDLQ.Arn
+                  - !GetAtt OutgoingMessageDLQ.Arn
+                  - !GetAtt AnalyticsDLQ.Arn
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -330,6 +452,14 @@ Resources:
                 # AWS Services Configuration
                 S3_DATA_BUCKET: !Ref WhatsAppDataBucket
                 DYNAMODB_TABLE: !Ref MessageDeduplicationTable
+                
+                # SQS Configuration
+                INCOMING_QUEUE_URL: !Ref IncomingMessageQueue
+                OUTGOING_QUEUE_URL: !Ref OutgoingMessageQueue
+                ANALYTICS_QUEUE_URL: !Ref AnalyticsQueue
+                INCOMING_DLQ_URL: !Ref IncomingMessageDLQ
+                OUTGOING_DLQ_URL: !Ref OutgoingMessageDLQ
+                ANALYTICS_DLQ_URL: !Ref AnalyticsDLQ
         AutoDeploymentsEnabled: true
       InstanceConfiguration:
         Cpu: !If [IsProduction, '1 vCPU', '0.25 vCPU']
@@ -412,6 +542,25 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-LogGroup'
 
+  # SQS Queue Information
+  IncomingQueueUrl:
+    Description: SQS Queue URL for incoming WhatsApp messages
+    Value: !Ref IncomingMessageQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-IncomingQueue'
+
+  OutgoingQueueUrl:
+    Description: SQS Queue URL for outgoing WhatsApp messages
+    Value: !Ref OutgoingMessageQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-OutgoingQueue'
+
+  AnalyticsQueueUrl:
+    Description: SQS Queue URL for analytics processing
+    Value: !Ref AnalyticsQueue
+    Export:
+      Name: !Sub '${AWS::StackName}-AnalyticsQueue'
+
   # Environment Summary
   EnvironmentSummary:
     Description: Summary of environment-specific configurations
@@ -421,3 +570,4 @@ Outputs:
       Database: whatsapp_business_${Environment} 
       DynamoDB Table: ${MessageDeduplicationTable}
       S3 Bucket: ${WhatsAppDataBucket}
+      SQS Queues: ${IncomingMessageQueue}, ${OutgoingMessageQueue}, ${AnalyticsQueue}

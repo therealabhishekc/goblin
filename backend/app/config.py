@@ -31,6 +31,14 @@ class Settings(BaseSettings):
     # Redis settings
     redis_url: Optional[str] = None
     
+    # SQS Configuration
+    incoming_queue_url: Optional[str] = None
+    outgoing_queue_url: Optional[str] = None
+    analytics_queue_url: Optional[str] = None
+    incoming_dlq_url: Optional[str] = None
+    outgoing_dlq_url: Optional[str] = None
+    analytics_dlq_url: Optional[str] = None
+    
     # Application settings
     debug: bool = False
     log_level: str = "INFO"
