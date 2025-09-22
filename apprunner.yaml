@@ -6,9 +6,10 @@ build:
       - echo "Building WhatsApp Business API..."
       - pip install --upgrade pip
       - pip install -r backend/requirements.txt
+      - echo "Python path setup complete"
 run:
   runtime-version: 3.12
-  command: cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+  command: PYTHONPATH=/app/backend python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
   network:
     port: 8000
   env:
