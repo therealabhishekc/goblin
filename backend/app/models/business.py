@@ -3,7 +3,7 @@ Business-related data models.
 Includes analytics, metrics, and business intelligence models.
 """
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 from pydantic import BaseModel, Field
 from sqlalchemy import Column, String, Integer, DateTime, Boolean, Float, JSON
 from sqlalchemy.dialects.postgresql import UUID
@@ -42,7 +42,7 @@ class MessageTemplate(BaseModel):
     name: str = Field(..., description="Template name")
     category: str = Field(..., description="Template category")
     template_text: str = Field(..., description="Template text content")
-    variables: list[str] = Field(default=[], description="Template variables")
+    variables: List[str] = Field(default=[], description="Template variables")
     is_active: bool = Field(True, description="Is template active")
 
 # SQLAlchemy Database Models

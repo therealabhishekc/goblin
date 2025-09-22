@@ -2,7 +2,7 @@
 High-level messaging service functions
 Provides easy-to-use functions for sending messages and events
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import time
 
 from app.services.sqs_service import send_outgoing_message as _send_outgoing_message
@@ -225,7 +225,7 @@ async def track_webhook_event(
 
 # Bulk operations
 async def send_bulk_messages(
-    messages: list[Dict[str, Any]],
+    messages: List[Dict[str, Any]],
     priority: str = "normal"
 ) -> Dict[str, Any]:
     """
