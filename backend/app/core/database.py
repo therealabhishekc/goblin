@@ -6,7 +6,9 @@ Handles PostgreSQL and DynamoDB c
     db_password = os.getenv("DB_PASSWORD", "password")
     url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     logger.info("🔑 Using password authentication")
-    return urltional password authentication
+    return url
+
+# Create engine with dynamic URLtional password authentication
     db_password = os.getenv("DB_PASSWORD", "password")
     url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     logger.info("🔑 Using password authentication")
