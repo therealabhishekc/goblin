@@ -1,6 +1,22 @@
 """
 Database connection management.
-Handles PostgreSQL and DynamoDB connections with IAM authentication.
+Handles PostgreSQL and DynamoDB c    
+     #    
+    # Use traditional password authentication
+    db_password = os.getenv("DB_PASSWORD", "password")
+    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    logger.info("🔑 Using password authentication")
+    return urltional password authentication
+    db_password = os.getenv("DB_PASSWORD", "password")
+    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    logger.info("🔑 Using password authentication")
+    return url
+
+# Create engine with dynamic URLaditional password authentication
+    db_password = os.getenv("DB_PASSWORD", "password")
+    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    logger.info("🔑 Using password authentication")
+    return url with IAM authentication.
 """
 import os
 import boto3
@@ -43,12 +59,20 @@ def get_iam_db_token():
 
 def create_database_url():
     """Create database URL with appropriate authentication"""
-    # Try to get DATABASE_URL from config first, then fall back to environment
+    
+    if USE_IAM_AUTH:
+        # Always use IAM authentication when enabled, ignore DATABASE_URL
+        logger.info("🔐 Using IAM database authentication")
+        token = get_iam_db_token()
+        url = f"postgresql://{DB_USER}:{token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
+        return url
+    
+    # For non-IAM auth, try DATABASE_URL first
     try:
         from ..config import get_settings
         settings = get_settings()
         database_url = settings.database_url
-        if database_url:
+        if database_url and ':' in database_url.split('@')[0]:  # Check if password is included
             logger.info("🔧 Using DATABASE_URL from configuration")
             return database_url
     except Exception as e:
@@ -56,22 +80,15 @@ def create_database_url():
     
     # Fallback to environment variable
     DATABASE_URL = os.getenv("DATABASE_URL")
-    if DATABASE_URL:
+    if DATABASE_URL and ':' in DATABASE_URL.split('@')[0]:  # Check if password is included
         logger.info("🔧 Using DATABASE_URL from environment")
         return DATABASE_URL
     
-    if USE_IAM_AUTH:
-        # Use IAM authentication
-        token = get_iam_db_token()
-        url = f"postgresql://{DB_USER}:{token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
-        logger.info("🔐 Using IAM database authentication")
-        return url
-    else:
-        # Use traditional password authentication
-        db_password = os.getenv("DB_PASSWORD", "password")
-        url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-        logger.info("🔑 Using password authentication")
-        return url
+    # Use traditional password authentication
+    db_password = os.getenv("DB_PASSWORD", "password")
+    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+    logger.info("� Using password authentication")
+    return url
 
 # Create engine with dynamic URL
 def create_db_engine():
