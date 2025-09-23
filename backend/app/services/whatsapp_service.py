@@ -2,7 +2,7 @@
 WhatsApp service for handling business logic around WhatsApp operations.
 This service coordinates between repositories and implements business rules.
 """
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from ..repositories.analytics_repository import AnalyticsRepository
 from ..models.whatsapp import WhatsAppMessage
 from ..models.user import UserProfile
 from ..core.database import get_db_session
+from ..core.logging import logger
 
 class WhatsAppService:
     """Service for WhatsApp business logic"""
@@ -29,7 +30,7 @@ class WhatsAppService:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.db.close()
     
-    def process_incoming_message(self, webhook_data: dict) -> Dict[str, str]:
+    async def process_incoming_message(self, webhook_data: dict) -> Dict[str, str]:
         """
         Process incoming WhatsApp message from webhook.
         This is the main business logic for handling new messages.
@@ -59,6 +60,9 @@ class WhatsAppService:
             # Update user interaction
             self.user_repo.update_last_interaction(phone_number)
             
+            # Process automated replies
+            await self._process_automated_reply(phone_number, webhook_data)
+            
             return {
                 "status": "success", 
                 "message": "Message processed successfully",
@@ -68,6 +72,84 @@ class WhatsAppService:
             
         except Exception as e:
             return {"status": "error", "message": f"Processing failed: {str(e)}"}
+    
+    async def send_message(self, phone_number: str, message_data: Dict[str, Any]) -> bool:
+        """
+        Send a WhatsApp message using the WhatsApp API
+        This method is called by the outgoing message worker
+        
+        Args:
+            phone_number: Recipient phone number
+            message_data: Message data with type and content
+            
+        Returns:
+            True if message sent successfully, False otherwise
+        """
+        try:
+            from app.whatsapp_api import send_whatsapp_message
+            
+            # Send message via WhatsApp API
+            result = await send_whatsapp_message(phone_number, message_data)
+            
+            # Store the sent message in database
+            sent_message_data = {
+                "message_id": result.get('messages', [{}])[0].get('id'),
+                "from_phone": "business",  # This is an outgoing message
+                "to_phone": phone_number,
+                "message_type": message_data.get("type", "text"),
+                "content": message_data.get("content", str(message_data)),
+                "timestamp": datetime.utcnow(),
+                "status": "sent",
+                "direction": "outgoing"
+            }
+            
+            # Store in database if we have the structure
+            try:
+                from app.models.whatsapp import WhatsAppMessage
+                sent_message = WhatsAppMessage(**sent_message_data)
+                self.message_repo.create(sent_message)
+            except Exception as db_e:
+                logger.warning(f"Failed to store sent message in database: {db_e}")
+            
+            # Update analytics
+            self.analytics_repo.increment_responses_sent()
+            
+            logger.info(f"✅ Message sent successfully to {phone_number}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to send message to {phone_number}: {e}")
+            return False
+    
+    async def _process_automated_reply(self, phone_number: str, webhook_data: dict):
+        """Process automated replies for incoming messages"""
+        try:
+            from app.services.reply_automation import reply_automation
+            
+            # Extract message text
+            message_text = self._extract_message_text(webhook_data)
+            message_type = self._extract_message_type(webhook_data)
+            
+            if message_text:
+                # Get user context for better replies
+                user_context = {
+                    "phone_number": phone_number,
+                    "user_profile": self.get_user_profile(phone_number)
+                }
+                
+                # Process automated reply
+                reply_message_id = await reply_automation.process_incoming_message(
+                    phone_number=phone_number,
+                    message_text=message_text,
+                    message_type=message_type,
+                    user_context=user_context
+                )
+                
+                if reply_message_id:
+                    logger.info(f"🤖 Automated reply queued for {phone_number}: {reply_message_id}")
+        
+        except Exception as e:
+            logger.error(f"❌ Error processing automated reply: {e}")
     
     def get_user_conversation(self, phone_number: str, limit: int = 50) -> List[dict]:
         """Get conversation history for a user"""
@@ -123,6 +205,23 @@ class WhatsAppService:
             return webhook_data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("messages", [{}])[0].get("id")
         except (IndexError, KeyError):
             return None
+    
+    def _extract_message_text(self, webhook_data: dict) -> Optional[str]:
+        """Extract message text from webhook data"""
+        try:
+            message = webhook_data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("messages", [{}])[0]
+            if message.get("type") == "text":
+                return message.get("text", {}).get("body")
+        except (IndexError, KeyError):
+            pass
+        return None
+    
+    def _extract_message_type(self, webhook_data: dict) -> str:
+        """Extract message type from webhook data"""
+        try:
+            return webhook_data.get("entry", [{}])[0].get("changes", [{}])[0].get("value", {}).get("messages", [{}])[0].get("type", "text")
+        except (IndexError, KeyError):
+            return "text"
     
     def _ensure_user_exists(self, phone_number: str, webhook_data: dict):
         """Create user if doesn't exist, return existing user otherwise"""

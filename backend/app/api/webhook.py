@@ -126,7 +126,7 @@ async def process_webhook_directly(payload: dict, db: Session):
         
         # Process message with business service
         with WhatsAppService(db) as service:
-            result = service.process_incoming_message(payload)
+            result = await service.process_incoming_message(payload)
             
             if result["status"] == "duplicate":
                 logger.info(f"🔄 Duplicate message: {webhook_data.message_id}")

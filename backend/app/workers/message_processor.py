@@ -138,7 +138,7 @@ class MessageProcessor:
             # Process with WhatsApp service
             with get_db_session() as db:
                 with WhatsAppService(db) as service:
-                    result = service.process_incoming_message(webhook_data)
+                    result = await service.process_incoming_message(webhook_data)
                     
                     if result["status"] in ["success", "duplicate"]:
                         # Message processed successfully

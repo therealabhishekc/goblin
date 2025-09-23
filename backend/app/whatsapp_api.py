@@ -1,10 +1,53 @@
 import httpx
 import os
+from typing import Dict, Any, Optional, List
+
+from app.core.logging import logger
 
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
 
-async def send_template_message(to: str, template_name: str):
+
+async def send_template_message(to: str, template_name: str, parameters: Optional[List[Dict]] = None):
+    """Send a WhatsApp template message with optional parameters"""
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    template_data = {
+        "name": template_name,
+        "language": {"code": "en_US"}
+    }
+    
+    if parameters:
+        template_data["components"] = [{
+            "type": "body",
+            "parameters": parameters
+        }]
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "template",
+        "template": template_data
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"✅ Template message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            return result
+    except Exception as e:
+        logger.error(f"❌ Failed to send template message to {to}: {e}")
+        raise
+
+
+async def send_text_message(to: str, text: str) -> Dict[str, Any]:
+    """Send a WhatsApp text message"""
     url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -13,13 +56,236 @@ async def send_template_message(to: str, template_name: str):
     payload = {
         "messaging_product": "whatsapp",
         "to": to,
-        "type": "template",
-        "template": {
-            "name": template_name,
-            "language": {"code": "en_US"}
-        }
+        "type": "text",
+        "text": {"body": text}
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        return response.json()
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"✅ Text message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            return result
+    except Exception as e:
+        logger.error(f"❌ Failed to send text message to {to}: {e}")
+        raise
+
+async def send_image_message(to: str, image_url: str, caption: Optional[str] = None) -> Dict[str, Any]:
+    """Send a WhatsApp image message"""
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    image_data = {"link": image_url}
+    if caption:
+        image_data["caption"] = caption
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "image",
+        "image": image_data
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"✅ Image message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            return result
+    except Exception as e:
+        logger.error(f"❌ Failed to send image message to {to}: {e}")
+        raise
+
+async def send_document_message(to: str, document_url: str, filename: str, caption: Optional[str] = None) -> Dict[str, Any]:
+    """Send a WhatsApp document message (PDFs, Word docs, etc.)"""
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    document_data = {"link": document_url, "filename": filename}
+    if caption:
+        document_data["caption"] = caption
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "document",
+        "document": document_data
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"✅ Document message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            return result
+    except Exception as e:
+        logger.error(f"❌ Failed to send document message to {to}: {e}")
+        raise
+
+async def send_audio_message(to: str, audio_url: str) -> Dict[str, Any]:
+    """Send a WhatsApp audio message"""
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "audio",
+        "audio": {"link": audio_url}
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"✅ Audio message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            return result
+    except Exception as e:
+        logger.error(f"❌ Failed to send audio message to {to}: {e}")
+        raise
+
+async def send_video_message(to: str, video_url: str, caption: Optional[str] = None) -> Dict[str, Any]:
+    """Send a WhatsApp video message"""
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    video_data = {"link": video_url}
+    if caption:
+        video_data["caption"] = caption
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "video",
+        "video": video_data
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"✅ Video message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            return result
+    except Exception as e:
+        logger.error(f"❌ Failed to send video message to {to}: {e}")
+        raise
+
+async def send_location_message(to: str, latitude: float, longitude: float, name: Optional[str] = None, address: Optional[str] = None) -> Dict[str, Any]:
+    """Send a WhatsApp location message"""
+    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    location_data = {
+        "latitude": latitude,
+        "longitude": longitude
+    }
+    if name:
+        location_data["name"] = name
+    if address:
+        location_data["address"] = address
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": to,
+        "type": "location",
+        "location": location_data
+    }
+    
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            logger.info(f"✅ Location message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            return result
+    except Exception as e:
+        logger.error(f"❌ Failed to send location message to {to}: {e}")
+        raise
+
+async def send_whatsapp_message(to: str, message_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Universal message sender - routes to appropriate function based on message type
+    
+    Args:
+        to: Recipient phone number
+        message_data: Dictionary containing message type and data
+        
+    Returns:
+        WhatsApp API response
+    """
+    message_type = message_data.get("type", "text")
+    
+    try:
+        if message_type == "text":
+            content = message_data.get("content", message_data.get("text", ""))
+            return await send_text_message(to, content)
+            
+        elif message_type == "image":
+            image_url = message_data.get("media_url", message_data.get("image_url"))
+            caption = message_data.get("content", message_data.get("caption"))
+            if not image_url:
+                raise ValueError("Image URL is required for image messages")
+            return await send_image_message(to, image_url, caption)
+            
+        elif message_type == "document":
+            document_url = message_data.get("media_url", message_data.get("document_url"))
+            filename = message_data.get("filename", "document")
+            caption = message_data.get("content", message_data.get("caption"))
+            if not document_url:
+                raise ValueError("Document URL is required for document messages")
+            return await send_document_message(to, document_url, filename, caption)
+            
+        elif message_type == "audio":
+            audio_url = message_data.get("media_url", message_data.get("audio_url"))
+            if not audio_url:
+                raise ValueError("Audio URL is required for audio messages")
+            return await send_audio_message(to, audio_url)
+            
+        elif message_type == "video":
+            video_url = message_data.get("media_url", message_data.get("video_url"))
+            caption = message_data.get("content", message_data.get("caption"))
+            if not video_url:
+                raise ValueError("Video URL is required for video messages")
+            return await send_video_message(to, video_url, caption)
+            
+        elif message_type == "location":
+            lat = message_data.get("latitude")
+            lng = message_data.get("longitude")
+            name = message_data.get("name")
+            address = message_data.get("address")
+            if lat is None or lng is None:
+                raise ValueError("Latitude and longitude are required for location messages")
+            return await send_location_message(to, lat, lng, name, address)
+            
+        elif message_type == "template":
+            template_name = message_data.get("template_name", message_data.get("template"))
+            parameters = message_data.get("parameters")
+            if not template_name:
+                raise ValueError("Template name is required for template messages")
+            return await send_template_message(to, template_name, parameters)
+            
+        else:
+            raise ValueError(f"Unsupported message type: {message_type}")
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to send {message_type} message to {to}: {e}")
+        raise

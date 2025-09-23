@@ -5,7 +5,7 @@ Provides async message sending and queue management
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import time
 
 from app.services.sqs_service import send_outgoing_message, send_analytics_event, sqs_service, QueueType
@@ -16,10 +16,38 @@ router = APIRouter(prefix="/messaging", tags=["Async Messaging"])
 class OutgoingMessageRequest(BaseModel):
     """Request model for sending outgoing messages"""
     phone_number: str = Field(..., description="Phone number to send message to")
-    message_type: str = Field(..., description="Type of message (text, image, document, etc.)")
+    message_type: str = Field(..., description="Type of message (text, image, document, audio, video, location, template)")
     message_data: Dict[str, Any] = Field(..., description="Message content and metadata")
     priority: Optional[str] = Field("normal", description="Message priority (high, normal, low)")
     delay_seconds: Optional[int] = Field(0, description="Delay before processing (0-900 seconds)")
+
+class TextMessageRequest(BaseModel):
+    """Simplified request for text messages"""
+    phone_number: str = Field(..., description="Phone number to send message to")
+    text: str = Field(..., description="Text message content")
+    priority: Optional[str] = Field("normal", description="Message priority")
+
+class DocumentMessageRequest(BaseModel):
+    """Request for document messages (PDFs, etc.)"""
+    phone_number: str = Field(..., description="Phone number to send message to")
+    document_url: str = Field(..., description="URL of the document")
+    filename: str = Field(..., description="Filename for the document")
+    caption: Optional[str] = Field(None, description="Optional caption")
+    priority: Optional[str] = Field("normal", description="Message priority")
+
+class ImageMessageRequest(BaseModel):
+    """Request for image messages"""
+    phone_number: str = Field(..., description="Phone number to send message to")
+    image_url: str = Field(..., description="URL of the image")
+    caption: Optional[str] = Field(None, description="Optional caption")
+    priority: Optional[str] = Field("normal", description="Message priority")
+
+class TemplateMessageRequest(BaseModel):
+    """Request for template messages"""
+    phone_number: str = Field(..., description="Phone number to send message to")
+    template_name: str = Field(..., description="Name of the WhatsApp template")
+    parameters: Optional[List[Dict[str, Any]]] = Field(None, description="Template parameters")
+    priority: Optional[str] = Field("normal", description="Message priority")
 
 class AnalyticsEventRequest(BaseModel):
     """Request model for sending analytics events"""
@@ -80,6 +108,154 @@ async def send_message_async(request: OutgoingMessageRequest):
             status_code=500,
             detail=f"Failed to queue message: {str(e)}"
         )
+
+@router.post("/send/text")
+async def send_text_message_api(request: TextMessageRequest):
+    """Send a text message (simplified endpoint)"""
+    try:
+        metadata = {
+            "priority": request.priority,
+            "requested_at": int(time.time()),
+            "source": "text_api_endpoint"
+        }
+        
+        message_id = await send_outgoing_message(
+            phone_number=request.phone_number,
+            message_data={
+                "type": "text",
+                "content": request.text
+            },
+            metadata=metadata
+        )
+        
+        if message_id:
+            return {
+                "status": "queued",
+                "message_id": message_id,
+                "phone_number": request.phone_number,
+                "message_type": "text",
+                "estimated_processing_time": "1-5 minutes"
+            }
+        else:
+            raise HTTPException(status_code=503, detail="Message queuing service unavailable")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending text message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/send/document")
+async def send_document_message_api(request: DocumentMessageRequest):
+    """Send a document message (PDF, Word, etc.)"""
+    try:
+        metadata = {
+            "priority": request.priority,
+            "requested_at": int(time.time()),
+            "source": "document_api_endpoint",
+            "filename": request.filename
+        }
+        
+        message_id = await send_outgoing_message(
+            phone_number=request.phone_number,
+            message_data={
+                "type": "document",
+                "media_url": request.document_url,
+                "filename": request.filename,
+                "content": request.caption or request.filename
+            },
+            metadata=metadata
+        )
+        
+        if message_id:
+            return {
+                "status": "queued",
+                "message_id": message_id,
+                "phone_number": request.phone_number,
+                "message_type": "document",
+                "filename": request.filename,
+                "estimated_processing_time": "1-5 minutes"
+            }
+        else:
+            raise HTTPException(status_code=503, detail="Message queuing service unavailable")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending document message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/send/image")
+async def send_image_message_api(request: ImageMessageRequest):
+    """Send an image message"""
+    try:
+        metadata = {
+            "priority": request.priority,
+            "requested_at": int(time.time()),
+            "source": "image_api_endpoint"
+        }
+        
+        message_id = await send_outgoing_message(
+            phone_number=request.phone_number,
+            message_data={
+                "type": "image",
+                "media_url": request.image_url,
+                "content": request.caption or ""
+            },
+            metadata=metadata
+        )
+        
+        if message_id:
+            return {
+                "status": "queued",
+                "message_id": message_id,
+                "phone_number": request.phone_number,
+                "message_type": "image",
+                "estimated_processing_time": "1-5 minutes"
+            }
+        else:
+            raise HTTPException(status_code=503, detail="Message queuing service unavailable")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending image message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/send/template")
+async def send_template_message_api(request: TemplateMessageRequest):
+    """Send a WhatsApp template message"""
+    try:
+        metadata = {
+            "priority": request.priority,
+            "requested_at": int(time.time()),
+            "source": "template_api_endpoint",
+            "template_name": request.template_name
+        }
+        
+        message_data = {
+            "type": "template",
+            "template_name": request.template_name
+        }
+        
+        if request.parameters:
+            message_data["parameters"] = request.parameters
+        
+        message_id = await send_outgoing_message(
+            phone_number=request.phone_number,
+            message_data=message_data,
+            metadata=metadata
+        )
+        
+        if message_id:
+            return {
+                "status": "queued",
+                "message_id": message_id,
+                "phone_number": request.phone_number,
+                "message_type": "template",
+                "template_name": request.template_name,
+                "estimated_processing_time": "1-5 minutes"
+            }
+        else:
+            raise HTTPException(status_code=503, detail="Message queuing service unavailable")
+            
+    except Exception as e:
+        logger.error(f"❌ Error sending template message: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/analytics")
 async def send_analytics_event_api(request: AnalyticsEventRequest):
