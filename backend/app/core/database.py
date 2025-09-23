@@ -29,6 +29,7 @@ from typing import Generator
 from contextlib import contextmanager
 from botocore.exceptions import ClientError
 import logging
+from urllib.parse import quote_plus
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,9 @@ def create_database_url():
         # Always use IAM authentication when enabled, ignore DATABASE_URL
         logger.info("🔐 Using IAM database authentication")
         token = get_iam_db_token()
-        url = f"postgresql://{DB_USER}:{token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
+        # URL encode the token to handle special characters
+        encoded_token = quote_plus(token)
+        url = f"postgresql://{DB_USER}:{encoded_token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
         return url
     
     # For non-IAM auth, try DATABASE_URL first
@@ -118,8 +121,9 @@ def refresh_iam_token(dialect, conn_rec, cargs, cparams):
     if USE_IAM_AUTH and not DATABASE_URL:
         try:
             token = get_iam_db_token()
-            # Update the password in connection params
-            cparams['password'] = token
+            # URL encode the token and update the password in connection params
+            encoded_token = quote_plus(token)
+            cparams['password'] = encoded_token
             logger.debug("🔄 IAM token refreshed for new connection")
         except Exception as e:
             logger.error(f"❌ Failed to refresh IAM token: {e}")
