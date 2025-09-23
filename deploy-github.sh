@@ -43,13 +43,14 @@ echo "🌐 Default VPC: $DEFAULT_VPC_ID"
 echo "🔒 Allowed CIDR: $ALLOWED_CIDR"
 
 # Validate required environment variables
-if [ -z "$WHATSAPP_TOKEN" ] || [ -z "$VERIFY_TOKEN" ]; then
+if [ -z "$WHATSAPP_TOKEN" ] || [ -z "$VERIFY_TOKEN" ] || [ -z "$WHATSAPP_PHONE_NUMBER_ID" ]; then
     echo "❌ Error: Required environment variables not set!"
-    echo "Please set: WHATSAPP_TOKEN and VERIFY_TOKEN"
+    echo "Please set: WHATSAPP_TOKEN, VERIFY_TOKEN, and WHATSAPP_PHONE_NUMBER_ID"
     echo ""
     echo "Example:"
     echo "export WHATSAPP_TOKEN='your_token_here'"
     echo "export VERIFY_TOKEN='your_verify_token_here'"
+    echo "export WHATSAPP_PHONE_NUMBER_ID='your_phone_number_id_here'"
     echo "$0 $ENVIRONMENT $AWS_REGION $GITHUB_CONNECTION_ARN $DEFAULT_VPC_ID $ALLOWED_CIDR"
     exit 1
 fi
@@ -82,6 +83,7 @@ aws cloudformation deploy \
         AllowedCIDR="$ALLOWED_CIDR" \
         WhatsAppToken="$WHATSAPP_TOKEN" \
         VerifyToken="$VERIFY_TOKEN" \
+        WhatsAppPhoneNumberId="$WHATSAPP_PHONE_NUMBER_ID" \
     --capabilities CAPABILITY_NAMED_IAM \
     --region "$AWS_REGION"
 

@@ -3,13 +3,30 @@ import os
 from typing import Dict, Any, Optional, List
 
 from app.core.logging import logger
+from app.config import get_settings
 
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
-PHONE_NUMBER_ID = os.getenv("PHONE_NUMBER_ID")
+# Get settings instance
+settings = get_settings()
+WHATSAPP_TOKEN = settings.whatsapp_token
+PHONE_NUMBER_ID = settings.whatsapp_phone_number_id or settings.phone_number_id
+
+def _validate_whatsapp_config():
+    """Validate WhatsApp configuration before API calls"""
+    if not WHATSAPP_TOKEN:
+        logger.error("❌ WHATSAPP_TOKEN not configured")
+        raise ValueError("WHATSAPP_TOKEN environment variable is required")
+    
+    if not PHONE_NUMBER_ID:
+        logger.error("❌ PHONE_NUMBER_ID not configured")
+        raise ValueError("PHONE_NUMBER_ID or WHATSAPP_PHONE_NUMBER_ID environment variable is required")
 
 
 async def send_template_message(to: str, template_name: str, parameters: Optional[List[Dict]] = None):
     """Send a WhatsApp template message with optional parameters"""
+    
+    # Validate configuration
+    _validate_whatsapp_config()
+    
     url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
@@ -48,6 +65,8 @@ async def send_template_message(to: str, template_name: str, parameters: Optiona
 
 async def send_text_message(to: str, text: str) -> Dict[str, Any]:
     """Send a WhatsApp text message"""
+    _validate_whatsapp_config()
+    
     url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
