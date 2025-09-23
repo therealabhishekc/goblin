@@ -42,8 +42,8 @@ async def lifespan(app: FastAPI):
     processor_task = None
     if SQS_ENABLED and message_processor:
         try:
-            # Start message processor in background
-            processor_task = asyncio.create_task(message_processor.start())
+            # Start message processor workers in background (don't await)
+            processor_task = asyncio.create_task(message_processor._start_workers())
             logger.info("✅ SQS message processor started")
         except Exception as e:
             logger.error(f"❌ Failed to start message processor: {e}")

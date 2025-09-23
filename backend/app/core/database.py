@@ -43,15 +43,27 @@ def get_iam_db_token():
 
 def create_database_url():
     """Create database URL with appropriate authentication"""
+    # Try to get DATABASE_URL from config first, then fall back to environment
+    try:
+        from ..config import get_settings
+        settings = get_settings()
+        database_url = settings.database_url
+        if database_url:
+            logger.info("🔧 Using DATABASE_URL from configuration")
+            return database_url
+    except Exception as e:
+        logger.warning(f"Could not load settings: {e}")
+    
+    # Fallback to environment variable
+    DATABASE_URL = os.getenv("DATABASE_URL")
     if DATABASE_URL:
-        # Use provided DATABASE_URL (for local development)
         logger.info("🔧 Using DATABASE_URL from environment")
         return DATABASE_URL
     
     if USE_IAM_AUTH:
         # Use IAM authentication
         token = get_iam_db_token()
-        url = f"postgresql://{DB_USER}:{token}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        url = f"postgresql://{DB_USER}:{token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
         logger.info("🔐 Using IAM database authentication")
         return url
     else:

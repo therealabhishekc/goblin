@@ -65,7 +65,7 @@ class Settings(BaseSettings):
         return v
     
     model_config = {
-        "env_file": ".env",
+        "env_file": [".env", "/Users/abskchsk/Documents/govindjis/wa-app/backend/.env"],
         "case_sensitive": False
     }
 

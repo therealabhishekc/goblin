@@ -439,7 +439,7 @@ Resources:
                 - Name: LOG_LEVEL
                   Value: !If [IsProduction, 'INFO', 'DEBUG']
                 - Name: DATABASE_URL
-                  Value: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}'
+                  Value: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
                 - Name: DB_HOST
                   Value: !GetAtt PostgreSQLDB.Endpoint.Address
                 - Name: DB_PORT
@@ -458,17 +458,17 @@ Resources:
                   Value: !Ref WhatsAppDataBucket
                 - Name: DYNAMODB_TABLE
                   Value: !Ref MessageDeduplicationTable
-                - Name: SQS_INCOMING_QUEUE_URL
+                - Name: INCOMING_QUEUE_URL
                   Value: !Ref IncomingMessageQueue
-                - Name: SQS_OUTGOING_QUEUE_URL
+                - Name: OUTGOING_QUEUE_URL
                   Value: !Ref OutgoingMessageQueue
-                - Name: SQS_ANALYTICS_QUEUE_URL
+                - Name: ANALYTICS_QUEUE_URL
                   Value: !Ref AnalyticsQueue
-                - Name: SQS_INCOMING_DLQ_URL
+                - Name: INCOMING_DLQ_URL
                   Value: !Ref IncomingMessageDLQ
-                - Name: SQS_OUTGOING_DLQ_URL
+                - Name: OUTGOING_DLQ_URL
                   Value: !Ref OutgoingMessageDLQ
-                - Name: SQS_ANALYTICS_DLQ_URL
+                - Name: ANALYTICS_DLQ_URL
                   Value: !Ref AnalyticsDLQ
         AutoDeploymentsEnabled: true
       InstanceConfiguration:

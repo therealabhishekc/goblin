@@ -10,6 +10,9 @@ import os
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, backend_dir)
 
+# Change to backend directory to ensure .env file is found
+os.chdir(backend_dir)
+
 if __name__ == "__main__":
     import uvicorn
     # Import the FastAPI app from the app module

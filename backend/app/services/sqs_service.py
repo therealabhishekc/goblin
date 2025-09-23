@@ -55,6 +55,16 @@ class SQSService:
             QueueType.OUTGOING: getattr(settings, 'outgoing_dlq_url', ''),
             QueueType.ANALYTICS: getattr(settings, 'analytics_dlq_url', '')
         }
+        
+        # Track missing queue URLs to avoid repeated logging
+        self._missing_queue_logged = set()
+        
+        # Check if any queue URLs are configured
+        configured_queues = [url for url in self.queue_urls.values() if url and url.strip()]
+        if not configured_queues:
+            logger.info("ℹ️  SQS queue URLs not configured - running in local development mode")
+        else:
+            logger.info(f"✅ SQS service initialized with {len(configured_queues)} configured queue(s)")
     
     async def send_message(
         self, 
@@ -78,7 +88,10 @@ class SQSService:
         try:
             queue_url = self.queue_urls.get(queue_type)
             if not queue_url:
-                logger.error(f"❌ Queue URL not configured for {queue_type.value}")
+                # Only log missing queue URL once per queue type
+                if queue_type not in self._missing_queue_logged:
+                    logger.warning(f"⚠️  Queue URL not configured for {queue_type.value} - skipping message")
+                    self._missing_queue_logged.add(queue_type)
                 return None
             
             # Prepare message
@@ -135,7 +148,10 @@ class SQSService:
         try:
             queue_url = self.queue_urls.get(queue_type)
             if not queue_url:
-                logger.error(f"❌ Queue URL not configured for {queue_type.value}")
+                # Only log missing queue URL once per queue type
+                if queue_type not in self._missing_queue_logged:
+                    logger.warning(f"⚠️  Queue URL not configured for {queue_type.value} - skipping receive")
+                    self._missing_queue_logged.add(queue_type)
                 return []
             
             async with self.session.client('sqs', region_name=self.region) as sqs:
@@ -195,7 +211,10 @@ class SQSService:
         try:
             queue_url = self.queue_urls.get(queue_type)
             if not queue_url:
-                logger.error(f"❌ Queue URL not configured for {queue_type.value}")
+                # Only log missing queue URL once per queue type
+                if queue_type not in self._missing_queue_logged:
+                    logger.warning(f"⚠️  Queue URL not configured for {queue_type.value} - skipping delete")
+                    self._missing_queue_logged.add(queue_type)
                 return False
             
             async with self.session.client('sqs', region_name=self.region) as sqs:
@@ -234,7 +253,10 @@ class SQSService:
         try:
             queue_url = self.queue_urls.get(queue_type)
             if not queue_url:
-                logger.error(f"❌ Queue URL not configured for {queue_type.value}")
+                # Only log missing queue URL once per queue type
+                if queue_type not in self._missing_queue_logged:
+                    logger.warning(f"⚠️  Queue URL not configured for {queue_type.value} - skipping visibility change")
+                    self._missing_queue_logged.add(queue_type)
                 return False
             
             async with self.session.client('sqs', region_name=self.region) as sqs:
@@ -267,7 +289,10 @@ class SQSService:
         try:
             queue_url = self.queue_urls.get(queue_type)
             if not queue_url:
-                logger.error(f"❌ Queue URL not configured for {queue_type.value}")
+                # Only log missing queue URL once per queue type
+                if queue_type not in self._missing_queue_logged:
+                    logger.warning(f"⚠️  Queue URL not configured for {queue_type.value} - skipping attributes")
+                    self._missing_queue_logged.add(queue_type)
                 return {}
             
             async with self.session.client('sqs', region_name=self.region) as sqs:

@@ -34,8 +34,8 @@ class MessageProcessor:
             "start_time": None
         }
     
-    async def start(self):
-        """Start all background workers"""
+    async def _start_workers(self):
+        """Start all background workers without blocking"""
         if self.running:
             logger.warning("⚠️  Message processor already running")
             return
@@ -51,6 +51,13 @@ class MessageProcessor:
             "analytics": asyncio.create_task(self._process_analytics_messages()),
             "health_monitor": asyncio.create_task(self._health_monitor())
         }
+        
+        # Don't await - let workers run in background
+        logger.info(f"📨 Started {len(self.workers)} worker tasks")
+    
+    async def start(self):
+        """Start all background workers"""
+        await self._start_workers()
         
         try:
             # Wait for all workers to complete

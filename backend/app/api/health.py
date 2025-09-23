@@ -5,6 +5,7 @@ System status, database connectivity, SQS integration, and service health monito
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from app.core.database import get_database_session
 from app.config import get_settings
 import time
@@ -38,7 +39,7 @@ async def database_health(db: Session = Depends(get_database_session)):
     """Database connectivity check"""
     try:
         # Simple query to test database connection
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         
         return {
             "status": "healthy",
@@ -78,7 +79,7 @@ async def detailed_health(db: Session = Depends(get_database_session)):
         settings = get_settings()
         
         # Test database
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db_status = "healthy"
         
         # Check configuration
