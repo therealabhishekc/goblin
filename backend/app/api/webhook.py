@@ -21,6 +21,7 @@ from app.config import get_settings
 router = APIRouter(prefix="/webhook", tags=["WhatsApp Webhook"])
 
 @router.get("/", response_class=PlainTextResponse)
+@router.get("", response_class=PlainTextResponse)
 async def verify_webhook(
     hub_mode: str = Query(None, alias="hub.mode"),
     hub_challenge: str = Query(None, alias="hub.challenge"),
@@ -31,16 +32,30 @@ async def verify_webhook(
     Called by WhatsApp to verify the webhook URL.
     """
     settings = get_settings()
-    logger.info(f"Webhook verification attempt: mode={hub_mode}, token_provided={bool(hub_verify_token)}")
+    logger.info(f"Webhook verification attempt: mode={hub_mode}, challenge_provided={bool(hub_challenge)}, token_provided={bool(hub_verify_token)}")
+    logger.info(f"Expected verify_token configured: {bool(settings.verify_token)}")
+    
+    if not hub_mode:
+        logger.error("❌ No hub.mode parameter received")
+        raise HTTPException(status_code=400, detail="Missing hub.mode parameter")
+    
+    if not hub_verify_token:
+        logger.error("❌ No hub.verify_token parameter received")
+        raise HTTPException(status_code=400, detail="Missing hub.verify_token parameter")
+    
+    if not settings.verify_token:
+        logger.error("❌ VERIFY_TOKEN environment variable not configured")
+        raise HTTPException(status_code=500, detail="Server configuration error")
     
     if hub_mode == "subscribe" and hub_verify_token == settings.verify_token:
         logger.info("✅ Webhook verification successful")
         return hub_challenge or ""
     
-    logger.warning("❌ Webhook verification failed")
+    logger.warning(f"❌ Webhook verification failed - mode: {hub_mode}, token_match: {hub_verify_token == settings.verify_token}")
     raise HTTPException(status_code=403, detail="Verification failed")
 
 @router.post("/")
+@router.post("")
 async def process_webhook(
     request: Request,
     db: Session = Depends(get_database_session)
@@ -151,10 +166,14 @@ async def process_webhook_directly(payload: dict, db: Session):
 @router.get("/test")
 async def test_webhook():
     """Test endpoint to verify webhook is working"""
+    settings = get_settings()
     return {
         "status": "webhook_active",
         "message": "WhatsApp webhook is ready to receive messages",
         "sqs_enabled": bool(sqs_service.queue_urls.get("incoming")),
+        "verify_token_configured": bool(settings.verify_token),
+        "whatsapp_token_configured": bool(settings.whatsapp_token),
+        "environment": settings.environment,
         "timestamp": int(time.time())
     }
 
@@ -177,3 +196,39 @@ async def webhook_health():
             },
             status_code=503
         )
+
+@router.get("/debug/config")
+async def debug_config():
+    """Debug endpoint to check configuration (use with caution in production)"""
+    settings = get_settings()
+    
+    # Only show config status, not actual values for security
+    config_status = {
+        "environment": settings.environment,
+        "verify_token_set": bool(settings.verify_token),
+        "whatsapp_token_set": bool(settings.whatsapp_token),
+        "phone_number_id_set": bool(settings.whatsapp_phone_number_id or settings.phone_number_id),
+        "database_url_set": bool(settings.database_url),
+        "aws_region": settings.aws_region,
+        "debug_mode": settings.debug,
+        "log_level": settings.log_level,
+        "sqs_queues": {
+            "incoming": bool(settings.incoming_queue_url),
+            "outgoing": bool(settings.outgoing_queue_url),
+            "analytics": bool(settings.analytics_queue_url)
+        }
+    }
+    
+    # Add environment variable existence check
+    env_vars = {
+        "VERIFY_TOKEN": "VERIFY_TOKEN" in os.environ,
+        "WHATSAPP_TOKEN": "WHATSAPP_TOKEN" in os.environ,
+        "DATABASE_URL": "DATABASE_URL" in os.environ,
+        "ENVIRONMENT": "ENVIRONMENT" in os.environ
+    }
+    
+    return {
+        "config_status": config_status,
+        "environment_variables": env_vars,
+        "timestamp": int(time.time())
+    }
