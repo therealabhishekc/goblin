@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 import asyncio
+import time
 
 from app.config import get_settings
 from app.core.database import init_database
@@ -38,13 +39,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
     
-    # Start SQS message processor if available
+    # 🔒 Start RACE-SAFE SQS message processor if available
     processor_task = None
     if SQS_ENABLED and message_processor:
         try:
-            # Start message processor workers in background (don't await)
-            processor_task = asyncio.create_task(message_processor._start_workers())
-            logger.info("✅ SQS message processor started")
+            # Start race-safe message processor in background
+            processor_task = asyncio.create_task(message_processor.start_processing())
+            logger.info("✅ 🔒 Race-safe SQS message processor started")
         except Exception as e:
             logger.error(f"❌ Failed to start message processor: {e}")
     else:
@@ -52,18 +53,25 @@ async def lifespan(app: FastAPI):
     
     yield
     
-    # Shutdown
+    # 🔒 RACE-SAFE Shutdown
     logger.info("🛑 Application shutdown initiated")
     
-    # Stop message processor
-    if processor_task and not processor_task.done():
-        logger.info("🛑 Stopping message processor...")
-        await message_processor.stop()
-        processor_task.cancel()
+    # Stop message processor gracefully
+    if processor_task and message_processor:
+        logger.info("🛑 Stopping race-safe message processor...")
+        message_processor.stop_processing()
+        
+        # Give processor time to finish current messages
         try:
-            await processor_task
-        except asyncio.CancelledError:
-            logger.info("✅ Message processor stopped")
+            await asyncio.wait_for(processor_task, timeout=30.0)
+            logger.info("✅ Message processor stopped gracefully")
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ Message processor stop timeout, cancelling...")
+            processor_task.cancel()
+            try:
+                await processor_task
+            except asyncio.CancelledError:
+                logger.info("✅ Message processor cancelled")
     
     logger.info("🛑 Application shutdown complete")
 
@@ -108,12 +116,14 @@ except Exception as e:
 
 @app.get("/")
 async def root():
-    """Root endpoint"""
+    """🔒 Race-Safe Root endpoint with enhanced status information"""
     return {
-        "message": f"Welcome to {settings.app_name}",
+        "message": f"Welcome to {settings.app_name} 🔒 Race-Safe Edition",
         "version": settings.app_version,
         "status": "running",
         "features": {
+            "race_condition_prevention": True,
+            "atomic_deduplication": True,
             "sqs_queuing": SQS_ENABLED,
             "message_processing": bool(message_processor),
             "monitoring": True,
@@ -125,5 +135,41 @@ async def root():
             "messaging": "/messaging",
             "monitoring_dashboard": "/monitoring/dashboard",
             "webhook": "/webhook"
+        },
+        "processor_stats": message_processor.get_stats() if message_processor else None
+    }
+
+@app.get("/health/detailed")
+async def detailed_health_check():
+    """🔒 Enhanced health check with race-safe components"""
+    from app.services.sqs_service import sqs_service
+    from app.dynamodb_client import table
+    
+    health_status = {
+        "status": "healthy",
+        "timestamp": int(time.time()),
+        "components": {
+            "dynamodb": {
+                "status": "healthy" if table else "unavailable",
+                "table_configured": bool(table)
+            },
+            "sqs": "checking...",
+            "message_processor": {
+                "status": "running" if (message_processor and message_processor.running) else "stopped",
+                "stats": message_processor.get_stats() if message_processor else None
+            }
         }
     }
+    
+    # Check SQS health
+    try:
+        sqs_health = await sqs_service.health_check()
+        health_status["components"]["sqs"] = sqs_health
+    except Exception as e:
+        health_status["components"]["sqs"] = {
+            "status": "unhealthy",
+            "error": str(e)
+        }
+        health_status["status"] = "degraded"
+    
+    return health_status

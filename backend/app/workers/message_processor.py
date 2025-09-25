@@ -1,344 +1,289 @@
 """
-Background workers for processing SQS messages
-Handles incoming, outgoing, and analytics message processing
+🔒 RACE-SAFE Background workers for processing SQS messages
+Handles incoming, outgoing, and analytics message processing with complete race condition prevention
+
+Race Condition Prevention Features:
+- Atomic message claiming with DynamoDB
+- Processor ownership tracking
+- Extended visibility timeouts
+- Graceful error handling and retries
 """
 import asyncio
 import json
 import logging
 import signal
 import time
+import uuid
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
+from datetime import datetime
 
 from app.services.sqs_service import sqs_service, QueueType, SQSMessage
 from app.services.whatsapp_service import WhatsAppService
 from app.core.database import get_db_session
 from app.core.logging import logger
 from app.config import get_settings
+# 🔒 Import race-safe DynamoDB functions
+from app.dynamodb_client import (
+    claim_message_processing, 
+    update_message_status_atomic,
+    table
+)
 
 settings = get_settings()
 
 class MessageProcessor:
     """
-    Background message processor for handling SQS queues
+    🔒 RACE-SAFE Background message processor for handling SQS queues
+    
+    Prevents multiple processors from handling the same message by using
+    atomic DynamoDB operations for message claiming and status tracking.
     """
     
     def __init__(self):
+        self.processor_id = str(uuid.uuid4())  # Unique processor instance ID
         self.running = False
-        self.workers = {}
+        self.whatsapp_service = WhatsAppService()
+        
+        # 🔒 Race-safe statistics tracking
         self.stats = {
-            "incoming_processed": 0,
-            "outgoing_processed": 0,
-            "analytics_processed": 0,
-            "errors": 0,
+            "processor_id": self.processor_id,
+            "processed_count": 0,
+            "error_count": 0,
+            "duplicate_count": 0,  # Messages already claimed by other processors
             "start_time": None
         }
-    
-    async def _start_workers(self):
-        """Start all background workers without blocking"""
-        if self.running:
-            logger.warning("⚠️  Message processor already running")
-            return
         
+        logger.info(f"🤖 Message processor initialized: {self.processor_id}")
+    
+    async def start_processing(self):
+        """🔒 RACE-SAFE: Start the message processing loop"""
         self.running = True
         self.stats["start_time"] = time.time()
-        logger.info("🚀 Starting message processor workers")
-        
-        # Create worker tasks
-        self.workers = {
-            "incoming": asyncio.create_task(self._process_incoming_messages()),
-            "outgoing": asyncio.create_task(self._process_outgoing_messages()),
-            "analytics": asyncio.create_task(self._process_analytics_messages()),
-            "health_monitor": asyncio.create_task(self._health_monitor())
-        }
-        
-        # Don't await - let workers run in background
-        logger.info(f"📨 Started {len(self.workers)} worker tasks")
-    
-    async def start(self):
-        """Start all background workers"""
-        await self._start_workers()
-        
-        try:
-            # Wait for all workers to complete
-            await asyncio.gather(*self.workers.values())
-        except asyncio.CancelledError:
-            logger.info("🛑 Message processor workers cancelled")
-        except Exception as e:
-            logger.error(f"❌ Error in message processor: {e}")
-        finally:
-            await self.stop()
-    
-    async def stop(self):
-        """Stop all background workers gracefully"""
-        if not self.running:
-            return
-        
-        logger.info("🛑 Stopping message processor workers...")
-        self.running = False
-        
-        # Cancel all worker tasks
-        for name, task in self.workers.items():
-            if not task.done():
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    logger.info(f"✅ Worker {name} stopped")
-        
-        # Log final stats
-        uptime = time.time() - self.stats["start_time"] if self.stats["start_time"] else 0
-        logger.info(f"📊 Final stats - Uptime: {uptime:.1f}s, "
-                   f"Incoming: {self.stats['incoming_processed']}, "
-                   f"Outgoing: {self.stats['outgoing_processed']}, "
-                   f"Analytics: {self.stats['analytics_processed']}, "
-                   f"Errors: {self.stats['errors']}")
-    
-    async def _process_incoming_messages(self):
-        """Process incoming WhatsApp messages from SQS"""
-        logger.info("📨 Starting incoming message worker")
+        logger.info(f"🚀 Message processor {self.processor_id} started")
         
         while self.running:
             try:
-                # Receive messages from incoming queue
+                # 📨 Receive messages with long polling (reduces API calls)
                 messages = await sqs_service.receive_messages(
+                    queue_type=QueueType.INCOMING,
+                    max_messages=10,  # Process up to 10 messages concurrently
+                    wait_time_seconds=20,  # Long polling for efficiency
+                    visibility_timeout=900  # 15 minutes to prevent races
+                )
+                
+                if messages:
+                    logger.info(f"📥 Received {len(messages)} messages for processing")
+                    
+                    # 🔄 Process messages concurrently but safely
+                    tasks = [self.process_message_safe(msg) for msg in messages]
+                    results = await asyncio.gather(*tasks, return_exceptions=True)
+                    
+                    # Log any exceptions from concurrent processing
+                    for i, result in enumerate(results):
+                        if isinstance(result, Exception):
+                            logger.error(f"❌ Concurrent processing error for message {messages[i].message_id}: {result}")
+                
+                # Brief pause if no messages to prevent tight loop
+                if not messages:
+                    await asyncio.sleep(1)
+                    
+            except Exception as e:
+                logger.error(f"❌ Message processing loop error in processor {self.processor_id}: {e}")
+                await asyncio.sleep(5)  # Brief pause before retrying
+    
+    async def process_message_safe(self, sqs_message: SQSMessage):
+        """🔒 RACE-SAFE: Process individual SQS message with full protection"""
+        processing_start = time.time()
+        
+        try:
+            # Extract message data
+            webhook_data = sqs_message.body.get("data", {}).get("webhook_data", {})
+            message = webhook_data.get("message", {})
+            contact = webhook_data.get("contact", {})
+            metadata = sqs_message.body.get("data", {}).get("metadata", {})
+            
+            message_id = message.get("id") or metadata.get("message_id")
+            phone_number = message.get("from", "unknown")
+            message_type = message.get("type", "unknown")
+            processing_id = sqs_message.processing_id or metadata.get("processing_id")
+            
+            if not message_id:
+                logger.error(f"❌ No message_id in SQS message {sqs_message.message_id}")
+                await sqs_service.delete_message(QueueType.INCOMING, sqs_message.receipt_handle)
+                return
+            
+            logger.info(f"🔄 Processing message: {message_id} (type: {message_type}, from: {phone_number})")
+            
+            # 🔒 Step 1: Atomically claim this message for processing
+            if not claim_message_processing(message_id, self.processor_id):
+                logger.info(f"⚠️ Message {message_id} already claimed by another processor")
+                self.stats["duplicate_count"] += 1
+                # Don't delete from SQS - let other processors handle or let it timeout
+                return
+            
+            # 🔒 Step 2: Extend visibility timeout to prevent other processors from seeing this
+            await sqs_service.change_message_visibility(
+                QueueType.INCOMING,
+                sqs_message.receipt_handle,
+                1800  # 30 minutes - generous time for processing
+            )
+            
+            # 🔒 Step 3: Process the WhatsApp message with error handling
+            try:
+                processing_result = await self.handle_whatsapp_message(
+                    message=message,
+                    contact=contact,
+                    metadata=metadata,
+                    processing_id=processing_id
+                )
+                
+                # 🔒 Step 4: Atomically mark as completed
+                update_success = update_message_status_atomic(
+                    message_id=message_id,
+                    status="completed",
+                    processor_id=self.processor_id,
+                    result=processing_result
+                )
+                
+                if update_success:
+                    # 🗑️ Delete from SQS only after successful processing and status update
+                    await sqs_service.delete_message(QueueType.INCOMING, sqs_message.receipt_handle)
+                    
+                    processing_time = time.time() - processing_start
+                    self.stats["processed_count"] += 1
+                    
+                    logger.info(
+                        f"✅ Message completed: {message_id} "
+                        f"(processor: {self.processor_id}, time: {processing_time:.3f}s)"
+                    )
+                else:
+                    logger.error(f"❌ Failed to update status for completed message: {message_id}")
+                    # Don't delete from SQS - let it retry
+                
+            except Exception as processing_error:
+                # 🔒 Step 4b: Mark as failed with atomic update
+                logger.error(f"❌ Processing failed for {message_id}: {processing_error}")
+                
+                update_message_status_atomic(
+                    message_id=message_id,
+                    status="failed",
+                    processor_id=self.processor_id,
+                    error_message=str(processing_error)
+                )
+                
+                self.stats["error_count"] += 1
+                
+                # Don't delete from SQS - let it retry or go to DLQ after max attempts
+                # Extend visibility timeout to prevent immediate retry
+                await sqs_service.change_message_visibility(
                     QueueType.INCOMING,
-                    max_messages=10,
-                    wait_time_seconds=20
+                    sqs_message.receipt_handle,
+                    300  # 5 minutes before retry
                 )
                 
-                if not messages:
-                    continue
-                
-                logger.debug(f"📥 Processing {len(messages)} incoming messages")
-                
-                # Process messages concurrently
-                tasks = [
-                    self._process_single_incoming_message(msg) 
-                    for msg in messages
-                ]
-                await asyncio.gather(*tasks, return_exceptions=True)
-                
-            except Exception as e:
-                logger.error(f"❌ Error in incoming message worker: {e}")
-                self.stats["errors"] += 1
-                await asyncio.sleep(5)  # Wait before retrying
-    
-    async def _process_single_incoming_message(self, message: SQSMessage):
-        """Process a single incoming message"""
-        try:
-            webhook_data = message.body.get("data", {}).get("webhook_data", {})
-            metadata = message.body.get("data", {}).get("metadata", {})
-            
-            if not webhook_data:
-                logger.error("❌ No webhook data in message")
-                await sqs_service.delete_message(QueueType.INCOMING, message.receipt_handle)
-                return
-            
-            # Process with WhatsApp service
-            with get_db_session() as db:
-                with WhatsAppService(db) as service:
-                    result = await service.process_incoming_message(webhook_data)
-                    
-                    if result["status"] in ["success", "duplicate"]:
-                        # Message processed successfully
-                        await sqs_service.delete_message(QueueType.INCOMING, message.receipt_handle)
-                        self.stats["incoming_processed"] += 1
-                        logger.debug(f"✅ Processed incoming message: {result['status']}")
-                        
-                        # Send analytics event for successful processing
-                        if result["status"] == "success":
-                            await self._send_analytics_event("message_processed", {
-                                "message_id": result.get("message_id"),
-                                "processing_time": time.time() - message.timestamp,
-                                "source": "sqs_worker",
-                                "metadata": metadata
-                            })
-                    else:
-                        # Processing failed, let it retry
-                        logger.warning(f"⚠️  Message processing failed, will retry: {result}")
-                        self.stats["errors"] += 1
-            
         except Exception as e:
-            logger.error(f"❌ Error processing incoming message: {e}")
-            self.stats["errors"] += 1
-            # Don't delete the message, let it retry
+            logger.error(f"❌ Critical error processing SQS message {sqs_message.message_id}: {e}")
+            self.stats["error_count"] += 1
+            
+            # For critical errors, extend visibility timeout significantly
+            await sqs_service.change_message_visibility(
+                QueueType.INCOMING,
+                sqs_message.receipt_handle,
+                600  # 10 minutes
+            )
     
-    async def _process_outgoing_messages(self):
-        """Process outgoing WhatsApp messages from SQS"""
-        logger.info("📤 Starting outgoing message worker")
+    async def handle_whatsapp_message(
+        self, 
+        message: Dict[str, Any], 
+        contact: Dict[str, Any], 
+        metadata: Dict[str, Any],
+        processing_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        🔒 RACE-SAFE: Process WhatsApp message based on type
+        Returns processing result for status tracking
+        """
+        message_type = message.get("type", "unknown")
+        phone_number = message.get("from")
         
-        while self.running:
-            try:
-                # Receive messages from outgoing queue
-                messages = await sqs_service.receive_messages(
-                    QueueType.OUTGOING,
-                    max_messages=5,  # Fewer concurrent outgoing messages
-                    wait_time_seconds=20
+        try:
+            # Handle different message types
+            if message_type == "text":
+                text_body = message.get("text", {}).get("body", "")
+                result = await self.whatsapp_service.process_text_message(
+                    phone_number=phone_number,
+                    text_content=text_body,
+                    contact_info=contact,
+                    processing_metadata=metadata
                 )
                 
-                if not messages:
-                    continue
-                
-                logger.debug(f"📤 Processing {len(messages)} outgoing messages")
-                
-                # Process messages with some delay to respect rate limits
-                for message in messages:
-                    await self._process_single_outgoing_message(message)
-                    await asyncio.sleep(0.1)  # Small delay between sends
-                
-            except Exception as e:
-                logger.error(f"❌ Error in outgoing message worker: {e}")
-                self.stats["errors"] += 1
-                await asyncio.sleep(5)
-    
-    async def _process_single_outgoing_message(self, message: SQSMessage):
-        """Process a single outgoing message"""
-        try:
-            data = message.body.get("data", {})
-            phone_number = data.get("phone_number")
-            message_data = data.get("message_data", {})
-            metadata = data.get("metadata", {})
-            
-            if not phone_number or not message_data:
-                logger.error("❌ Invalid outgoing message data")
-                await sqs_service.delete_message(QueueType.OUTGOING, message.receipt_handle)
-                return
-            
-            # Send message with WhatsApp service
-            with get_db_session() as db:
-                with WhatsAppService(db) as service:
-                    success = await service.send_message(phone_number, message_data)
-                    
-                    if success:
-                        # Message sent successfully
-                        await sqs_service.delete_message(QueueType.OUTGOING, message.receipt_handle)
-                        self.stats["outgoing_processed"] += 1
-                        logger.debug(f"✅ Sent outgoing message to {phone_number}")
-                        
-                        # Send analytics event
-                        await self._send_analytics_event("message_sent", {
-                            "phone_number": phone_number,
-                            "message_type": message_data.get("type", "unknown"),
-                            "processing_time": time.time() - message.timestamp,
-                            "metadata": metadata
-                        })
-                    else:
-                        # Sending failed, let it retry
-                        logger.warning(f"⚠️  Failed to send message to {phone_number}, will retry")
-                        self.stats["errors"] += 1
-            
-        except Exception as e:
-            logger.error(f"❌ Error processing outgoing message: {e}")
-            self.stats["errors"] += 1
-    
-    async def _process_analytics_messages(self):
-        """Process analytics events from SQS"""
-        logger.info("📊 Starting analytics worker")
-        
-        while self.running:
-            try:
-                # Receive messages from analytics queue
-                messages = await sqs_service.receive_messages(
-                    QueueType.ANALYTICS,
-                    max_messages=10,
-                    wait_time_seconds=20
+            elif message_type == "interactive":
+                interactive_data = message.get("interactive", {})
+                result = await self.whatsapp_service.process_interactive_message(
+                    phone_number=phone_number,
+                    interactive_data=interactive_data,
+                    contact_info=contact,
+                    processing_metadata=metadata
                 )
                 
-                if not messages:
-                    continue
+            elif message_type in ["image", "document", "audio", "video"]:
+                media_data = message.get(message_type, {})
+                result = await self.whatsapp_service.process_media_message(
+                    phone_number=phone_number,
+                    media_type=message_type,
+                    media_data=media_data,
+                    contact_info=contact,
+                    processing_metadata=metadata
+                )
                 
-                logger.debug(f"📊 Processing {len(messages)} analytics events")
+            elif message_type == "location":
+                location_data = message.get("location", {})
+                result = await self.whatsapp_service.process_location_message(
+                    phone_number=phone_number,
+                    location_data=location_data,
+                    contact_info=contact,
+                    processing_metadata=metadata
+                )
                 
-                # Process messages in batches
-                for message in messages:
-                    await self._process_single_analytics_event(message)
-                
-            except Exception as e:
-                logger.error(f"❌ Error in analytics worker: {e}")
-                self.stats["errors"] += 1
-                await asyncio.sleep(5)
-    
-    async def _process_single_analytics_event(self, message: SQSMessage):
-        """Process a single analytics event"""
-        try:
-            data = message.body.get("data", {})
-            event_type = data.get("event_type")
-            event_data = data.get("event_data", {})
+            else:
+                logger.warning(f"⚠️ Unsupported message type: {message_type} from {phone_number}")
+                result = {
+                    "status": "unsupported",
+                    "message_type": message_type,
+                    "action": "ignored"
+                }
             
-            if not event_type:
-                logger.error("❌ No event type in analytics message")
-                await sqs_service.delete_message(QueueType.ANALYTICS, message.receipt_handle)
-                return
-            
-            # Process analytics event
-            logger.debug(f"📊 Processing analytics event: {event_type}")
-            
-            # Mark as processed
-            await sqs_service.delete_message(QueueType.ANALYTICS, message.receipt_handle)
-            self.stats["analytics_processed"] += 1
-            logger.debug(f"✅ Processed analytics event: {event_type}")
+            return {
+                "processing_result": result,
+                "message_type": message_type,
+                "phone_number": phone_number,
+                "processing_id": processing_id,
+                "processed_at": datetime.utcnow().isoformat(),
+                "processor_id": self.processor_id
+            }
             
         except Exception as e:
-            logger.error(f"❌ Error processing analytics event: {e}")
-            self.stats["errors"] += 1
+            logger.error(f"❌ WhatsApp message handling failed for {phone_number}: {e}")
+            raise  # Re-raise to be handled by the caller
     
-    async def _send_analytics_event(self, event_type: str, event_data: Dict[str, Any]):
-        """Helper to send analytics events"""
-        try:
-            from app.services.sqs_service import send_analytics_event
-            await send_analytics_event(event_type, event_data)
-        except Exception as e:
-            logger.warning(f"⚠️  Failed to send analytics event: {e}")
-    
-    async def _health_monitor(self):
-        """Monitor worker health and log stats periodically"""
-        logger.info("💓 Starting health monitor")
-        
-        while self.running:
-            try:
-                await asyncio.sleep(60)  # Log stats every minute
-                
-                if not self.running:
-                    break
-                
-                uptime = time.time() - self.stats["start_time"] if self.stats["start_time"] else 0
-                logger.info(f"💓 Worker stats - Uptime: {uptime:.1f}s, "
-                           f"Incoming: {self.stats['incoming_processed']}, "
-                           f"Outgoing: {self.stats['outgoing_processed']}, "
-                           f"Analytics: {self.stats['analytics_processed']}, "
-                           f"Errors: {self.stats['errors']}")
-                
-            except Exception as e:
-                logger.error(f"❌ Error in health monitor: {e}")
+    def stop_processing(self):
+        """🔒 RACE-SAFE: Stop the message processing loop"""
+        self.running = False
+        logger.info(
+            f"🛑 Message processor {self.processor_id} stopped. "
+            f"Stats: {self.stats['processed_count']} processed, {self.stats['error_count']} errors, {self.stats['duplicate_count']} duplicates"
+        )
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get current worker statistics"""
-        uptime = time.time() - self.stats["start_time"] if self.stats["start_time"] else 0
+        """Get processor statistics"""
         return {
-            **self.stats,
-            "uptime_seconds": uptime,
-            "running": self.running,
-            "workers": {name: not task.done() for name, task in self.workers.items()}
+            "processor_id": self.processor_id,
+            "processed_count": self.stats["processed_count"],
+            "error_count": self.stats["error_count"],
+            "duplicate_count": self.stats["duplicate_count"],
+            "running": self.running
         }
 
-# Global message processor instance
+# Global processor instance
 message_processor = MessageProcessor()
-
-# Context manager for message processor lifecycle
-@asynccontextmanager
-async def message_processor_lifespan():
-    """Context manager for message processor lifecycle"""
-    try:
-        # Start the processor
-        processor_task = asyncio.create_task(message_processor.start())
-        yield message_processor
-    finally:
-        # Stop the processor
-        await message_processor.stop()
-        if not processor_task.done():
-            processor_task.cancel()
-            try:
-                await processor_task
-            except asyncio.CancelledError:
-                pass
