@@ -16,6 +16,7 @@ import time
 import uuid
 from typing import Dict, Any, Optional
 from contextlib import asynccontextmanager
+import contextlib
 from datetime import datetime
 
 from app.services.sqs_service import sqs_service, QueueType, SQSMessage
@@ -53,6 +54,8 @@ class MessageProcessor:
             "duplicate_count": 0,  # Messages already claimed by other processors
             "start_time": None
         }
+        # Protect stats updates from concurrent asyncio tasks interleaving
+        self._stats_lock = asyncio.Lock()
         
         logger.info(f"🤖 Message processor initialized: {self.processor_id}")
     
@@ -118,8 +121,10 @@ class MessageProcessor:
             # 🔒 Step 1: Atomically claim this message for processing
             if not claim_message_processing(message_id, self.processor_id):
                 logger.info(f"⚠️ Message {message_id} already claimed by another processor")
-                self.stats["duplicate_count"] += 1
-                # Don't delete from SQS - let other processors handle or let it timeout
+                async with self._stats_lock:
+                    self.stats["duplicate_count"] += 1
+                # Safe to delete from SQS; another processor owns it
+                await sqs_service.delete_message(QueueType.INCOMING, sqs_message.receipt_handle)
                 return
             
             # 🔒 Step 2: Extend visibility timeout to prevent other processors from seeing this
@@ -127,6 +132,15 @@ class MessageProcessor:
                 QueueType.INCOMING,
                 sqs_message.receipt_handle,
                 1800  # 30 minutes - generous time for processing
+            )
+            # Start background heartbeat to keep extending visibility while processing
+            heartbeat = asyncio.create_task(
+                self._visibility_heartbeat(
+                    receipt_handle=sqs_message.receipt_handle,
+                    queue_type=QueueType.INCOMING,
+                    interval=60,
+                    visibility_extension=1800
+                )
             )
             
             # 🔒 Step 3: Process the WhatsApp message with error handling
@@ -151,7 +165,8 @@ class MessageProcessor:
                     await sqs_service.delete_message(QueueType.INCOMING, sqs_message.receipt_handle)
                     
                     processing_time = time.time() - processing_start
-                    self.stats["processed_count"] += 1
+                    async with self._stats_lock:
+                        self.stats["processed_count"] += 1
                     
                     logger.info(
                         f"✅ Message completed: {message_id} "
@@ -172,7 +187,8 @@ class MessageProcessor:
                     error_message=str(processing_error)
                 )
                 
-                self.stats["error_count"] += 1
+                async with self._stats_lock:
+                    self.stats["error_count"] += 1
                 
                 # Don't delete from SQS - let it retry or go to DLQ after max attempts
                 # Extend visibility timeout to prevent immediate retry
@@ -181,10 +197,16 @@ class MessageProcessor:
                     sqs_message.receipt_handle,
                     300  # 5 minutes before retry
                 )
+            finally:
+                # Stop heartbeat
+                with contextlib.suppress(asyncio.CancelledError):
+                    heartbeat.cancel()
+                    await heartbeat
                 
         except Exception as e:
             logger.error(f"❌ Critical error processing SQS message {sqs_message.message_id}: {e}")
-            self.stats["error_count"] += 1
+            async with self._stats_lock:
+                self.stats["error_count"] += 1
             
             # For critical errors, extend visibility timeout significantly
             await sqs_service.change_message_visibility(
@@ -192,6 +214,15 @@ class MessageProcessor:
                 sqs_message.receipt_handle,
                 600  # 10 minutes
             )
+
+    async def _visibility_heartbeat(self, receipt_handle: str, queue_type: QueueType, interval: int = 60, visibility_extension: int = 900):
+        """Periodically extend SQS message visibility while processing."""
+        try:
+            while self.running:
+                await asyncio.sleep(interval)
+                await sqs_service.change_message_visibility(queue_type, receipt_handle, visibility_extension)
+        except Exception as e:
+            logger.warning(f"⚠️ Visibility heartbeat failed: {e}")
     
     async def handle_whatsapp_message(
         self, 
