@@ -126,12 +126,16 @@ class SQSService:
                     'QueueType': {
                         'StringValue': queue_type.value,
                         'DataType': 'String'
-                    },
-                    'ProcessingId': {
-                        'StringValue': message_body.get('metadata', {}).get('processing_id', ''),
-                        'DataType': 'String'
                     }
                 })
+                
+                # Only include ProcessingId if we have a non-empty value
+                processing_id = message_body.get('metadata', {}).get('processing_id')
+                if processing_id and processing_id.strip():
+                    attrs['ProcessingId'] = {
+                        'StringValue': processing_id,
+                        'DataType': 'String'
+                    }
                 
                 response = await sqs.send_message(
                     QueueUrl=queue_url,
@@ -445,10 +449,16 @@ async def send_outgoing_message(phone_number: str, message_data: Dict[str, Any],
 
 async def send_analytics_event(event_type: str, event_data: Dict[str, Any], metadata: Optional[Dict[str, Any]] = None) -> Optional[str]:
     """🔒 RACE-SAFE: Send analytics event to processing queue"""
+    # Ensure metadata has a processing_id for tracking
+    if not metadata:
+        metadata = {}
+    if not metadata.get('processing_id'):
+        metadata['processing_id'] = str(uuid.uuid4())
+    
     message = {
         "event_type": event_type,
         "event_data": event_data,
-        "metadata": metadata or {},
+        "metadata": metadata,
         "source": "analytics",
         "timestamp": int(time.time())
     }
