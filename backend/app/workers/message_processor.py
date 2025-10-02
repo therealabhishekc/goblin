@@ -43,7 +43,7 @@ class MessageProcessor:
     def __init__(self):
         self.processor_id = str(uuid.uuid4())  # Unique processor instance ID
         self.running = False
-        self.whatsapp_service = WhatsAppService()
+        self.whatsapp_service = None  # Will be initialized when processing starts
         
         # 🔒 Race-safe statistics tracking
         self.stats = {
@@ -62,6 +62,10 @@ class MessageProcessor:
         """🔒 RACE-SAFE: Start the message processing loop"""
         self.running = True
         self.stats["start_time"] = time.time()
+        
+        # Initialize WhatsAppService now that database is ready
+        self.whatsapp_service = WhatsAppService()
+        
         logger.info(f"🚀 Message processor {self.processor_id} started")
         
         while self.running:
