@@ -1,5 +1,6 @@
 import httpx
 import os
+import json
 from typing import Dict, Any, Optional, List
 
 from app.core.logging import logger
@@ -87,10 +88,24 @@ async def send_text_message(to: str, text: str) -> Dict[str, Any]:
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=payload)
+            
+            # Log the request details for debugging
+            logger.debug(f"WhatsApp API Request - URL: {url}, Payload: {payload}")
+            
+            # Check response before raising
+            if response.status_code != 200:
+                error_body = response.text
+                logger.error(f"❌ WhatsApp API Error {response.status_code} for {to}: {error_body}")
+                logger.error(f"Request payload was: {json.dumps(payload, indent=2)}")
+            
             response.raise_for_status()
             result = response.json()
             logger.info(f"✅ Text message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
             return result
+    except httpx.HTTPStatusError as e:
+        logger.error(f"❌ Failed to send text message to {to}: HTTP {e.response.status_code}")
+        logger.error(f"Response body: {e.response.text}")
+        raise
     except Exception as e:
         logger.error(f"❌ Failed to send text message to {to}: {e}")
         raise
