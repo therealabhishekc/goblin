@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 
 from app.config import get_settings
-from app.core.database import SessionLocal, engine
+from app.core.database import get_db_session, engine, test_database_connection
 from app.core.logging import logger
 from sqlalchemy import text
 
@@ -76,8 +76,8 @@ class StartupValidator:
     async def _validate_database(self):
         """Validate database connectivity"""
         try:
-            db = SessionLocal()
-            try:
+            # Use the context manager which handles SessionLocal initialization
+            with get_db_session() as db:
                 # Test basic connectivity
                 db.execute(text("SELECT 1"))
                 
@@ -104,9 +104,6 @@ class StartupValidator:
                         message="Database tables may not be initialized - run migrations"
                     ))
                     
-            finally:
-                db.close()
-                
         except Exception as e:
             self.validation_results.append(ValidationResult(
                 name="Database Connectivity",
