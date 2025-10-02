@@ -490,8 +490,8 @@ Resources:
                   Value: !Ref AWS::Region
                 - Name: LOG_LEVEL
                   Value: !If [IsProduction, 'INFO', 'INFO']
-                # - Name: DATABASE_URL
-                #   Value: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
+                - Name: DATABASE_URL
+                  Value: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
                 - Name: DB_HOST
                   Value: !GetAtt PostgreSQLDB.Endpoint.Address
                 - Name: DB_PORT
