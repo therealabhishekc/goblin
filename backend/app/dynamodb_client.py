@@ -9,16 +9,18 @@ from botocore.exceptions import ClientError
 
 from app.core.logging import logger
 
-# Get configuration
-try:
-    from app.config import get_settings
-    settings = get_settings()
-    TABLE_NAME = getattr(settings, "dynamodb_table_name", None) or os.getenv("DYNAMODB_TABLE")
-    AWS_REGION = getattr(settings, "aws_region", None) or os.getenv("AWS_REGION", "us-east-1")
-except Exception:
-    # Fallback to environment variables only
-    TABLE_NAME = os.getenv("DYNAMODB_TABLE") or os.getenv("DYNAMODB_TABLE_NAME", "whatsapp-dedup-dev")
-    AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+# Get configuration - prioritize environment variables over config defaults
+TABLE_NAME = os.getenv("DYNAMODB_TABLE") or os.getenv("DYNAMODB_TABLE_NAME")
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+
+# If no environment variable is set, fall back to config.py settings
+if not TABLE_NAME:
+    try:
+        from app.config import get_settings
+        settings = get_settings()
+        TABLE_NAME = getattr(settings, "dynamodb_table_name", "whatsapp-dedup-dev")
+    except Exception:
+        TABLE_NAME = "whatsapp-dedup-dev"
 
 # Initialize DynamoDB client
 try:
