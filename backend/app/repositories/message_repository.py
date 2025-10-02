@@ -68,3 +68,11 @@ class MessageRepository(BaseRepository[WhatsAppMessage]):
         return self.db.query(self.model_class).filter(
             self.model_class.timestamp >= since
         ).order_by(desc(self.model_class.timestamp)).all()
+        
+    def create_from_dict(self, message_data: dict) -> WhatsAppMessageDB:
+        """Create message from dictionary data"""
+        message = WhatsAppMessageDB(**message_data)
+        self.db.add(message)
+        self.db.commit()
+        self.db.refresh(message)
+        return message

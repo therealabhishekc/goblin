@@ -121,6 +121,175 @@ class WhatsAppService:
             logger.error(f"❌ Failed to send message to {phone_number}: {e}")
             return False
     
+    async def process_text_message(self, phone_number: str, text_content: str, contact_info: Dict[str, Any], processing_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Process an individual text message (called by message processor)"""
+        try:
+            # Store the message in database
+            message_data = {
+                "message_id": processing_metadata.get("message_id"),
+                "from_phone": phone_number,
+                "message_type": "text",
+                "content": text_content,
+                "timestamp": datetime.utcnow(),
+                "status": "processing"
+            }
+            
+            # Create or update user profile
+            user = self._ensure_user_exists_from_contact(phone_number, contact_info)
+            
+            # Store the message
+            stored_message = self.message_repo.create_from_dict(message_data)
+            
+            # Update analytics
+            self._update_analytics()
+            
+            # Update user interaction
+            self.user_repo.update_last_interaction(phone_number)
+            
+            # Process automated replies
+            reply_message_id = await self._process_automated_reply_direct(
+                phone_number=phone_number,
+                message_text=text_content,
+                message_type="text",
+                user_context={
+                    "phone_number": phone_number,
+                    "user_profile": self.get_user_profile(phone_number),
+                    "contact_info": contact_info
+                }
+            )
+            
+            return {
+                "status": "success",
+                "message_stored": True,
+                "reply_sent": reply_message_id is not None,
+                "reply_message_id": reply_message_id,
+                "user_id": str(user.id) if user else None
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error processing text message from {phone_number}: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+
+    async def process_interactive_message(self, phone_number: str, interactive_data: Dict[str, Any], contact_info: Dict[str, Any], processing_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Process an interactive message (buttons, lists, etc.)"""
+        try:
+            # Store the message in database
+            message_data = {
+                "message_id": processing_metadata.get("message_id"),
+                "from_phone": phone_number,
+                "message_type": "interactive",
+                "content": str(interactive_data),
+                "timestamp": datetime.utcnow(),
+                "status": "processing"
+            }
+            
+            # Create or update user profile
+            user = self._ensure_user_exists_from_contact(phone_number, contact_info)
+            
+            # Store the message
+            stored_message = self.message_repo.create_from_dict(message_data)
+            
+            # Update analytics
+            self._update_analytics()
+            
+            # Update user interaction
+            self.user_repo.update_last_interaction(phone_number)
+            
+            return {
+                "status": "success",
+                "message_stored": True,
+                "user_id": str(user.id) if user else None
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error processing interactive message from {phone_number}: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+
+    async def process_media_message(self, phone_number: str, media_type: str, media_data: Dict[str, Any], contact_info: Dict[str, Any], processing_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a media message (image, document, audio, video)"""
+        try:
+            # Store the message in database
+            message_data = {
+                "message_id": processing_metadata.get("message_id"),
+                "from_phone": phone_number,
+                "message_type": media_type,
+                "content": media_data.get("caption", ""),
+                "media_url": media_data.get("url"),
+                "media_type": media_data.get("mime_type"),
+                "timestamp": datetime.utcnow(),
+                "status": "processing"
+            }
+            
+            # Create or update user profile
+            user = self._ensure_user_exists_from_contact(phone_number, contact_info)
+            
+            # Store the message
+            stored_message = self.message_repo.create_from_dict(message_data)
+            
+            # Update analytics
+            self._update_analytics()
+            
+            # Update user interaction
+            self.user_repo.update_last_interaction(phone_number)
+            
+            return {
+                "status": "success",
+                "message_stored": True,
+                "media_type": media_type,
+                "user_id": str(user.id) if user else None
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error processing media message from {phone_number}: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+
+    async def process_location_message(self, phone_number: str, location_data: Dict[str, Any], contact_info: Dict[str, Any], processing_metadata: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a location message"""
+        try:
+            # Store the message in database
+            message_data = {
+                "message_id": processing_metadata.get("message_id"),
+                "from_phone": phone_number,
+                "message_type": "location",
+                "content": f"Location: {location_data.get('latitude')}, {location_data.get('longitude')}",
+                "timestamp": datetime.utcnow(),
+                "status": "processing"
+            }
+            
+            # Create or update user profile
+            user = self._ensure_user_exists_from_contact(phone_number, contact_info)
+            
+            # Store the message
+            stored_message = self.message_repo.create_from_dict(message_data)
+            
+            # Update analytics
+            self._update_analytics()
+            
+            # Update user interaction
+            self.user_repo.update_last_interaction(phone_number)
+            
+            return {
+                "status": "success",
+                "message_stored": True,
+                "user_id": str(user.id) if user else None
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Error processing location message from {phone_number}: {e}")
+            return {
+                "status": "error",
+                "error": str(e)
+            }
+
     async def _process_automated_reply(self, phone_number: str, webhook_data: dict):
         """Process automated replies for incoming messages"""
         try:
@@ -150,6 +319,28 @@ class WhatsAppService:
         
         except Exception as e:
             logger.error(f"❌ Error processing automated reply: {e}")
+            
+    async def _process_automated_reply_direct(self, phone_number: str, message_text: str, message_type: str, user_context: Dict[str, Any]) -> Optional[str]:
+        """Process automated replies for direct message processing (called by message processor)"""
+        try:
+            from app.services.reply_automation import reply_automation
+            
+            # Process automated reply
+            reply_message_id = await reply_automation.process_incoming_message(
+                phone_number=phone_number,
+                message_text=message_text,
+                message_type=message_type,
+                user_context=user_context
+            )
+            
+            if reply_message_id:
+                logger.info(f"🤖 Automated reply queued for {phone_number}: {reply_message_id}")
+                
+            return reply_message_id
+        
+        except Exception as e:
+            logger.error(f"❌ Error processing automated reply: {e}")
+            return None
     
     def get_user_conversation(self, phone_number: str, limit: int = 50) -> List[dict]:
         """Get conversation history for a user"""
@@ -230,6 +421,29 @@ class WhatsAppService:
         if not user:
             # Extract user info from webhook
             profile_name = self._extract_profile_name(webhook_data)
+            
+            user_data = UserProfile(
+                whatsapp_phone=phone_number,
+                display_name=profile_name,
+                first_contact=datetime.utcnow(),
+                last_interaction=datetime.utcnow(),
+                total_messages=1
+            )
+            user = self.user_repo.create(user_data)
+        else:
+            # Update message count
+            user.total_messages += 1
+            self.db.commit()
+        
+        return user
+        
+    def _ensure_user_exists_from_contact(self, phone_number: str, contact_info: Dict[str, Any]):
+        """Create user if doesn't exist, return existing user otherwise (from contact info)"""
+        user = self.user_repo.get_by_phone_number(phone_number)
+        
+        if not user:
+            # Extract user info from contact
+            profile_name = contact_info.get("profile", {}).get("name") if contact_info else None
             
             user_data = UserProfile(
                 whatsapp_phone=phone_number,
