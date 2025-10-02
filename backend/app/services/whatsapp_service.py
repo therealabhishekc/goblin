@@ -19,7 +19,18 @@ class WhatsAppService:
     
     def __init__(self, db_session: Session = None):
         """Initialize service with database session"""
-        self.db = db_session or get_db_session()
+        from ..core.database import SessionLocal
+        
+        if db_session:
+            self.db = db_session
+            self._owns_session = False
+        else:
+            # Create a new session if none provided
+            if SessionLocal is None:
+                raise RuntimeError("Database not initialized. Call init_database() first.")
+            self.db = SessionLocal()
+            self._owns_session = True
+        
         self.user_repo = UserRepository(self.db)
         self.message_repo = MessageRepository(self.db)
         self.analytics_repo = AnalyticsRepository(self.db)
@@ -28,7 +39,13 @@ class WhatsAppService:
         return self
     
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.db.close()
+        # Only close session if we created it
+        if self._owns_session:
+            if exc_type:
+                self.db.rollback()
+            else:
+                self.db.commit()
+            self.db.close()
     
     async def process_incoming_message(self, webhook_data: dict) -> Dict[str, str]:
         """
