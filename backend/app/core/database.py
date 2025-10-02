@@ -1,28 +1,10 @@
 """
 Database connection management.
-Handles PostgreSQL and DynamoDB c    
-     #    
-    # Use traditional password authentication
-    db_password = os.getenv("DB_PASSWORD", "password")
-    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    logger.info("🔑 Using password authentication")
-    return url
-
-# Create engine with dynamic URLtional password authentication
-    db_password = os.getenv("DB_PASSWORD", "password")
-    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    logger.info("🔑 Using password authentication")
-    return url
-
-# Create engine with dynamic URLaditional password authentication
-    db_password = os.getenv("DB_PASSWORD", "password")
-    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    logger.info("🔑 Using password authentication")
-    return url with IAM authentication.
+Handles PostgreSQL connections with IAM authentication.
 """
 import os
 import boto3
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
@@ -38,9 +20,6 @@ DB_NAME = os.getenv("DB_NAME", "whatsapp_business")
 DB_USER = os.getenv("DB_USER", "app_user")
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 USE_IAM_AUTH = os.getenv("USE_IAM_AUTH", "false").lower() == "true"
-
-# Fallback to traditional auth for local development
-DATABASE_URL = os.getenv("DATABASE_URL")
 
 def get_iam_db_token():
     """Generate IAM database authentication token"""
@@ -61,83 +40,63 @@ def get_iam_db_token():
 def create_database_url():
     """Create database URL with appropriate authentication"""
     
+    logger.info(f"🔧 Database config - USE_IAM_AUTH: {USE_IAM_AUTH}, DB_HOST: {DB_HOST}")
+    
     if USE_IAM_AUTH:
-        # Always use IAM authentication when enabled, ignore DATABASE_URL
         logger.info("🔐 Using IAM database authentication")
-        token = get_iam_db_token()
-        # URL encode the token to handle special characters
-        encoded_token = quote_plus(token)
-        url = f"postgresql://{DB_USER}:{encoded_token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
-        return url
-    
-    # For non-IAM auth, try DATABASE_URL first
-    try:
-        from ..config import get_settings
-        settings = get_settings()
-        database_url = settings.database_url
-        if database_url and ':' in database_url.split('@')[0]:  # Check if password is included
-            logger.info("🔧 Using DATABASE_URL from configuration")
-            return database_url
-    except Exception as e:
-        logger.warning(f"Could not load settings: {e}")
-    
-    # Fallback to environment variable
-    DATABASE_URL = os.getenv("DATABASE_URL")
-    if DATABASE_URL and ':' in DATABASE_URL.split('@')[0]:  # Check if password is included
-        logger.info("🔧 Using DATABASE_URL from environment")
-        return DATABASE_URL
-    
-    # Use traditional password authentication
-    db_password = os.getenv("DB_PASSWORD", "password")
-    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    logger.info("� Using password authentication")
-    return url
-
-# Create engine with dynamic URL
-def create_db_engine():
-    """Create SQLAlchemy engine with token refresh capability"""
-    
-    def get_connection():
-        """Get database connection with fresh IAM token if needed"""
-        url = create_database_url()
-        return create_engine(
-            url,
-            pool_pre_ping=True,
-            pool_recycle=300,  # Refresh connections every 5 minutes
-            echo=os.getenv("DEBUG", "false").lower() == "true"
-        )
-    
-    return get_connection()
-
-# Initialize engine
-engine = create_db_engine()
-
-# Add event listener to refresh IAM tokens
-@event.listens_for(engine, "do_connect")
-def refresh_iam_token(dialect, conn_rec, cargs, cparams):
-    """Refresh IAM token on new connections"""
-    if USE_IAM_AUTH and not DATABASE_URL:
         try:
             token = get_iam_db_token()
-            # URL encode the token and update the password in connection params
             encoded_token = quote_plus(token)
-            cparams['password'] = encoded_token
-            logger.debug("🔄 IAM token refreshed for new connection")
+            url = f"postgresql://{DB_USER}:{encoded_token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
+            logger.info(f"✅ IAM database URL created for {DB_HOST}")
+            return url
         except Exception as e:
-            logger.error(f"❌ Failed to refresh IAM token: {e}")
+            logger.error(f"❌ Failed to create IAM database URL: {e}")
             raise
+    
+    # Fallback to environment DATABASE_URL
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        logger.info("🔧 Using DATABASE_URL from environment")
+        return database_url
+    
+    # Last resort: password auth
+    db_password = os.getenv("DB_PASSWORD", "password")
+    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
+    logger.info("🔑 Using password authentication")
+    return url
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# Database setup
+engine = None
+SessionLocal = None
 Base = declarative_base()
 
-# DynamoDB setup
-dynamodb = boto3.resource('dynamodb', region_name=os.getenv('AWS_REGION', 'us-east-1'))
+def init_database():
+    """Initialize database connection"""
+    global engine, SessionLocal
+    
+    try:
+        logger.info("🔧 Initializing database connection...")
+        url = create_database_url()
+        engine = create_engine(url, echo=False, pool_pre_ping=True)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+        
+        # Test connection
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            result.fetchone()
+            
+        logger.info("✅ Database connection initialized successfully")
+        
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize database: {e}")
+        raise
 
-def get_database_session() -> Generator[Session, None, None]:
-    """
-    Dependency function to get database session.
-    Use this in FastAPI dependency injection.
-    """
+def get_database_session():
+    """Get database session dependency for FastAPI"""
+    if SessionLocal is None:
+        raise RuntimeError("Database not initialized. Call init_database() first.")
+    
     db = SessionLocal()
     try:
         yield db
@@ -145,30 +104,32 @@ def get_database_session() -> Generator[Session, None, None]:
         db.close()
 
 @contextmanager
-def get_db_session():
-    """
-    Context manager for database sessions.
-    Use in services and repositories.
-    """
+def get_db_session() -> Generator[Session, None, None]:
+    """Context manager for database sessions"""
+    if SessionLocal is None:
+        raise RuntimeError("Database not initialized. Call init_database() first.")
+    
     db = SessionLocal()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
-def init_database():
-    """
-    Initialize database by creating all tables.
-    Run this on application startup.
-    """
-    # Import all SQLAlchemy models to ensure they're registered
-    from ..models.whatsapp import WhatsAppMessageDB
-    from ..models.user import UserProfileDB  
-    from ..models.business import BusinessMetricsDB, MessageTemplateDB
-    
-    Base.metadata.create_all(bind=engine)
-    print("✅ Database tables created successfully")
-
-def get_dynamodb_table(table_name: str):
-    """Get DynamoDB table reference"""
-    return dynamodb.Table(table_name)
+def test_database_connection() -> bool:
+    """Test database connectivity"""
+    try:
+        if engine is None:
+            init_database()
+        
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT 1"))
+            result.fetchone()
+        
+        return True
+    except Exception as e:
+        logger.error(f"Database connection test failed: {e}")
+        return False
