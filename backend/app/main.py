@@ -14,6 +14,10 @@ try:
     from app.api import archive
 except ImportError:
     archive = None
+try:
+    from app.api import admin
+except ImportError:
+    admin = None
 from app.api_endpoints import router as legacy_api_router
 
 # SQS Workers
@@ -98,6 +102,14 @@ if archive:
         logger.info("✅ Archive API endpoints loaded")
     except Exception as e:
         logger.warning(f"⚠️  Archive API endpoints failed to load: {e}")
+
+# Include admin router if available  
+if admin:
+    try:
+        app.include_router(admin.router)
+        logger.info("✅ Admin API endpoints loaded")
+    except Exception as e:
+        logger.warning(f"⚠️  Admin API endpoints failed to load: {e}")
 
 # Legacy endpoints (for backward compatibility)
 try:

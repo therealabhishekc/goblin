@@ -69,8 +69,15 @@ else
     echo "✅ GitHub connection validated"
 fi
 
+# Load archival configuration early for main deployment
+ENV_FILE="deploy/environments/lambda-archival.env"
+if [ -f "$ENV_FILE" ]; then
+    echo "📋 Loading archival configuration from: $ENV_FILE"
+    source "$ENV_FILE"
+fi
+
 # Deploy CloudFormation stack
-echo "☁️  Deploying CloudFormation stack..."
+echo "☁️  Deploying CloudFormation stack (including archival infrastructure)..."
 aws cloudformation deploy \
     --template-file deploy/aws/cloudformation/infrastructure.yaml \
     --stack-name "whatsapp-api-$ENVIRONMENT" \
@@ -84,20 +91,148 @@ aws cloudformation deploy \
         WhatsAppToken="$WHATSAPP_TOKEN" \
         VerifyToken="$VERIFY_TOKEN" \
         WhatsAppPhoneNumberId="$WHATSAPP_PHONE_NUMBER_ID" \
+        ArchiveThresholdDays="${ARCHIVE_THRESHOLD_DAYS:-90}" \
+        MediaThresholdDays="${MEDIA_THRESHOLD_DAYS:-30}" \
+        EnableArchival="${ENABLE_ARCHIVAL:-true}" \
     --capabilities CAPABILITY_NAMED_IAM \
     --region "$AWS_REGION"
 
 if [ $? -eq 0 ]; then
-    echo "✅ Deployment successful!"
+    echo "✅ Main infrastructure deployment successful!"
     
     # Get outputs
     echo ""
     echo "📋 Deployment Information:"
-    aws cloudformation describe-stacks \
+    SERVICE_URL=$(aws cloudformation describe-stacks \
         --stack-name "whatsapp-api-$ENVIRONMENT" \
         --region "$AWS_REGION" \
         --query 'Stacks[0].Outputs[?OutputKey==`AppRunnerServiceUrl`].OutputValue' \
-        --output text
+        --output text)
+    
+    echo "🌐 App Runner Service URL: $SERVICE_URL"
+    
+    # Deploy Lambda archival functions (integrated in main template)
+    echo ""
+    echo "🔄 Updating Lambda archival function code..."
+    echo "⏳ This may take a few minutes..."
+    
+    DEPLOY_LAMBDA_SUCCESS=false
+    
+    # Load archival configuration
+    ENV_FILE="deploy/environments/lambda-archival.env"
+    if [ -f "$ENV_FILE" ]; then
+        echo "📋 Loading archival configuration from: $ENV_FILE"
+        source "$ENV_FILE"
+    fi
+    
+    # Check if archival is enabled and Lambda functions exist
+    ARCHIVAL_ENABLED=$(aws cloudformation describe-stacks \
+        --stack-name "whatsapp-api-$ENVIRONMENT" \
+        --region "$AWS_REGION" \
+        --query 'Stacks[0].Outputs[?OutputKey==`ArchivalScheduleEnabled`].OutputValue' \
+        --output text 2>/dev/null || echo "")
+    
+    if [ "$ARCHIVAL_ENABLED" = "true" ]; then
+        echo "✅ Archival functions are enabled in infrastructure"
+        
+        # Create build directory
+        BUILD_DIR="dist/lambda"
+        mkdir -p "$BUILD_DIR"
+        
+        # Function to build and update Lambda code
+        update_lambda_function() {
+            local function_name=$1
+            local source_dir="deploy/lambda/$function_name"
+            local build_dir="$BUILD_DIR/$function_name-build"
+            local zip_file="$BUILD_DIR/$function_name.zip"
+            local lambda_function_name="${ENVIRONMENT}-whatsapp-${function_name}"
+            
+            echo "   📦 Building $function_name package..."
+            
+            # Clean and create build directory
+            rm -rf "$build_dir"
+            mkdir -p "$build_dir"
+            
+            # Copy source files
+            cp "$source_dir/handler.py" "$build_dir/"
+            
+            # Install dependencies if requirements exist
+            if [ -f "$source_dir/requirements.txt" ]; then
+                echo "   📚 Installing dependencies..."
+                pip install -r "$source_dir/requirements.txt" -t "$build_dir" --upgrade --quiet
+            fi
+            
+            # Create zip package
+            cd "$build_dir"
+            zip -r "../$(basename "$zip_file")" . -x "*.pyc" "__pycache__/*" "*.dist-info/*" --quiet
+            cd - > /dev/null
+            
+            echo "   🚀 Updating Lambda function: $lambda_function_name"
+            
+            # Update Lambda function code
+            if aws lambda update-function-code \
+                --function-name "$lambda_function_name" \
+                --zip-file "fileb://$zip_file" \
+                --region "$AWS_REGION" >/dev/null 2>&1; then
+                
+                echo "   ✅ Successfully updated: $lambda_function_name"
+                return 0
+            else
+                echo "   ❌ Failed to update: $lambda_function_name"
+                return 1
+            fi
+        }
+        
+        # Update Lambda functions if source directories exist
+        if [ -d "deploy/lambda/message-archival" ] && [ -d "deploy/lambda/media-archival" ]; then
+            echo "🔨 Building and updating Lambda functions..."
+            
+            if update_lambda_function "message-archival" && update_lambda_function "media-archival"; then
+                echo "✅ Lambda archival functions updated successfully!"
+                DEPLOY_LAMBDA_SUCCESS=true
+                
+                # Test the functions
+                echo "🧪 Testing Lambda functions..."
+                
+                # Test message archival
+                MESSAGE_FUNCTION_NAME="${ENVIRONMENT}-whatsapp-message-archival"
+                if aws lambda invoke \
+                    --function-name "$MESSAGE_FUNCTION_NAME" \
+                    --payload '{"test": true, "dry_run": true}' \
+                    --region "$AWS_REGION" \
+                    "$BUILD_DIR/test-response.json" >/dev/null 2>&1; then
+                    echo "   ✅ Message archival function test passed"
+                else
+                    echo "   ⚠️  Message archival function test failed"
+                fi
+                
+                # Test media archival
+                MEDIA_FUNCTION_NAME="${ENVIRONMENT}-whatsapp-media-archival"
+                if aws lambda invoke \
+                    --function-name "$MEDIA_FUNCTION_NAME" \
+                    --payload '{"test": true, "dry_run": true}' \
+                    --region "$AWS_REGION" \
+                    "$BUILD_DIR/test-response.json" >/dev/null 2>&1; then
+                    echo "   ✅ Media archival function test passed"
+                else
+                    echo "   ⚠️  Media archival function test failed"
+                fi
+            else
+                echo "⚠️  Some Lambda function updates failed"
+            fi
+            
+            # Clean up build artifacts
+            rm -rf "$BUILD_DIR"
+        else
+            echo "⚠️  Lambda function sources not found in deploy/lambda/"
+            echo "   Archival functions are created but will use placeholder code"
+            DEPLOY_LAMBDA_SUCCESS=true  # Infrastructure exists, just no custom code
+        fi
+    else
+        echo "ℹ️  Archival functions are disabled (EnableArchival=false)"
+        echo "   To enable: redeploy with EnableArchival=true parameter"
+        DEPLOY_LAMBDA_SUCCESS=true  # Not an error, just disabled
+    fi
     
     echo ""
     echo "🎯 Next Steps:"
@@ -106,9 +241,20 @@ if [ $? -eq 0 ]; then
     echo "3. Create the IAM database user:"
     echo "   ./scripts/create-iam-db-user.sh $ENVIRONMENT"
     echo "4. Set up your WhatsApp webhook URL using the App Runner service URL above"
-    echo "5. Test the health endpoint: <service-url>/health"
+    echo "5. Test the health endpoint: ${SERVICE_URL}/health"
     echo "6. Monitor logs in CloudWatch: /aws/apprunner/whatsapp-api-$ENVIRONMENT"
+    
+    if [ "$DEPLOY_LAMBDA_SUCCESS" = true ]; then
+        echo ""
+        echo "📅 Automated Archival Configuration:"
+        echo "   - Message archival: Every 2 days at 2 AM UTC"
+        echo "   - Media archival: Every 2 days at 3 AM UTC"
+        echo "   - Admin API: ${SERVICE_URL}/api/admin/archival/"
+        echo ""
+        echo "🧪 Test archival functions:"
+        echo "   curl -X POST '${SERVICE_URL}/api/admin/archival/trigger?job_type=both&dry_run=true'"
+    fi
 else
-    echo "❌ Deployment failed!"
+    echo "❌ Main infrastructure deployment failed!"
     exit 1
 fi
