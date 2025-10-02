@@ -31,9 +31,11 @@ from app.api_endpoints import router as legacy_api_router
 # SQS Workers
 try:
     from app.workers.message_processor import message_processor
+    from app.workers.outgoing_processor import outgoing_processor
     SQS_ENABLED = True
 except ImportError:
     message_processor = None
+    outgoing_processor = None
     SQS_ENABLED = False
     logger.warning("⚠️  SQS workers not available - running without message processing")
 
@@ -68,6 +70,7 @@ async def lifespan(app: FastAPI):
     
     # 🔒 Start RACE-SAFE SQS message processor if available
     processor_task = None
+    outgoing_task = None
     if SQS_ENABLED and message_processor:
         try:
             # Start race-safe message processor in background
@@ -77,6 +80,17 @@ async def lifespan(app: FastAPI):
             logger.error(f"❌ Failed to start message processor: {e}")
     else:
         logger.info("ℹ️  Running without SQS message processing")
+    
+    # 🔒 Start RACE-SAFE SQS outgoing message processor if available
+    if SQS_ENABLED and outgoing_processor:
+        try:
+            # Start race-safe outgoing message processor in background
+            outgoing_task = asyncio.create_task(outgoing_processor.start_processing())
+            logger.info("✅ 🔒 Race-safe SQS outgoing message processor started")
+        except Exception as e:
+            logger.error(f"❌ Failed to start outgoing message processor: {e}")
+    else:
+        logger.info("ℹ️  Running without SQS outgoing message processing")
     
     yield
     
@@ -99,6 +113,23 @@ async def lifespan(app: FastAPI):
                 await processor_task
             except asyncio.CancelledError:
                 logger.info("✅ Message processor cancelled")
+    
+    # Stop outgoing message processor gracefully
+    if outgoing_task and outgoing_processor:
+        logger.info("🛑 Stopping race-safe outgoing message processor...")
+        outgoing_processor.stop_processing()
+        
+        # Give processor time to finish current messages
+        try:
+            await asyncio.wait_for(outgoing_task, timeout=30.0)
+            logger.info("✅ Outgoing message processor stopped gracefully")
+        except asyncio.TimeoutError:
+            logger.warning("⚠️ Outgoing message processor stop timeout, cancelling...")
+            outgoing_task.cancel()
+            try:
+                await outgoing_task
+            except asyncio.CancelledError:
+                logger.info("✅ Outgoing message processor cancelled")
     
     logger.info("🛑 Application shutdown complete")
 
@@ -161,6 +192,7 @@ async def root():
             "atomic_deduplication": True,
             "sqs_queuing": SQS_ENABLED,
             "message_processing": bool(message_processor),
+            "outgoing_processing": bool(outgoing_processor),
             "monitoring": True,
             "async_messaging": True
         },
@@ -171,7 +203,10 @@ async def root():
             "monitoring_dashboard": "/monitoring/dashboard",
             "webhook": "/webhook"
         },
-        "processor_stats": message_processor.get_stats() if message_processor else None
+        "processor_stats": {
+            "incoming": message_processor.get_stats() if message_processor else None,
+            "outgoing": outgoing_processor.get_stats() if outgoing_processor else None
+        }
     }
 
 @app.get("/health/detailed")
@@ -192,6 +227,10 @@ async def detailed_health_check():
             "message_processor": {
                 "status": "running" if (message_processor and message_processor.running) else "stopped",
                 "stats": message_processor.get_stats() if message_processor else None
+            },
+            "outgoing_processor": {
+                "status": "running" if (outgoing_processor and outgoing_processor.running) else "stopped",
+                "stats": outgoing_processor.get_stats() if outgoing_processor else None
             }
         }
     }
