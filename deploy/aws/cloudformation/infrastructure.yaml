@@ -79,6 +79,28 @@ Conditions:
 
 Resources:
   # ================================
+  # SECRETS MANAGEMENT
+  # ================================
+  WhatsAppCredentialsSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'whatsapp-credentials-${Environment}'
+      Description: WhatsApp Business API credentials and configuration
+      SecretString: !Sub |
+        {
+          "WHATSAPP_TOKEN": "${WhatsAppToken}",
+          "VERIFY_TOKEN": "${VerifyToken}",
+          "PHONE_NUMBER_ID": "${WhatsAppPhoneNumberId}"
+        }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: WhatsApp-Business-API
+        - Key: Purpose
+          Value: API-Credentials
+
+  # ================================
   # LOGGING & MONITORING
   # ================================
   ApplicationLogGroup:
@@ -365,6 +387,15 @@ Resources:
               Service: tasks.apprunner.amazonaws.com
             Action: sts:AssumeRole
       Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref WhatsAppCredentialsSecret
         - PolicyName: DynamoDBAccess
           PolicyDocument:
             Version: '2012-10-17'
@@ -473,14 +504,8 @@ Resources:
                   Value: 'app_user'
                 - Name: USE_IAM_AUTH
                   Value: 'true'
-                - Name: WHATSAPP_TOKEN
-                  Value: !Ref WhatsAppToken
-                - Name: VERIFY_TOKEN
-                  Value: !Ref VerifyToken
-                - Name: PHONE_NUMBER_ID
-                  Value: !Ref WhatsAppPhoneNumberId
-                - Name: WHATSAPP_PHONE_NUMBER_ID
-                  Value: !Ref WhatsAppPhoneNumberId
+                - Name: WHATSAPP_SECRETS_NAME
+                  Value: !Ref WhatsAppCredentialsSecret
                 - Name: S3_DATA_BUCKET
                   Value: !Ref WhatsAppDataBucket
                 - Name: DYNAMODB_TABLE
@@ -539,6 +564,15 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
+        - PolicyName: SecretsManagerArchivalAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:DescribeSecret
+                Resource: !Ref WhatsAppCredentialsSecret
         - PolicyName: S3ArchivalPolicy
           PolicyDocument:
             Version: '2012-10-17'
@@ -606,6 +640,7 @@ Resources:
           ARCHIVE_THRESHOLD_DAYS: !Ref ArchiveThresholdDays
           ENVIRONMENT: !Ref Environment
           BATCH_SIZE: '1000'
+          WHATSAPP_SECRETS_NAME: !Ref WhatsAppCredentialsSecret
       DeadLetterConfig:
         TargetArn: !GetAtt ArchivalDLQ.Arn
       Tags:
@@ -647,6 +682,7 @@ Resources:
           MEDIA_THRESHOLD_DAYS: !Ref MediaThresholdDays
           ENVIRONMENT: !Ref Environment
           BATCH_SIZE: '50'
+          WHATSAPP_SECRETS_NAME: !Ref WhatsAppCredentialsSecret
       DeadLetterConfig:
         TargetArn: !GetAtt ArchivalDLQ.Arn
       Tags:
@@ -881,6 +917,13 @@ Outputs:
     Export:
       Name: !Sub '${Environment}-archival-enabled'
 
+  # Security Resources
+  SecretsManagerSecretName:
+    Description: Name of the AWS Secrets Manager secret containing WhatsApp credentials
+    Value: !Ref WhatsAppCredentialsSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-WhatsAppSecrets'
+
   # Environment Summary
   EnvironmentSummary:
     Description: Summary of environment-specific configurations
@@ -892,3 +935,4 @@ Outputs:
       S3 Bucket: ${WhatsAppDataBucket}
       SQS Queues: ${IncomingMessageQueue}, ${OutgoingMessageQueue}, ${AnalyticsQueue}
       Archival: ${EnableArchival} (Messages: ${ArchiveThresholdDays}d, Media: ${MediaThresholdDays}d)
+      Secrets: ${WhatsAppCredentialsSecret}

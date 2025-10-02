@@ -8,6 +8,14 @@ from app.config import get_settings
 from app.core.database import init_database
 from app.core.logging import logger
 
+# Startup validation
+try:
+    from app.services.startup_validator import validate_startup
+    STARTUP_VALIDATION_AVAILABLE = True
+except ImportError:
+    validate_startup = None
+    STARTUP_VALIDATION_AVAILABLE = False
+
 # API routers
 from app.api import health, webhook, messaging, monitoring
 try:
@@ -42,6 +50,21 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Database initialized successfully")
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
+    
+    # Run startup validation
+    if STARTUP_VALIDATION_AVAILABLE:
+        try:
+            logger.info("🔍 Running startup validation...")
+            is_ready = await validate_startup()
+            if is_ready:
+                logger.info("🎉 Startup validation passed - application ready for traffic")
+            else:
+                logger.error("❌ Startup validation failed - application may not work correctly")
+                logger.error("   Check /health/startup endpoint for details")
+        except Exception as e:
+            logger.error(f"❌ Startup validation error: {e}")
+    else:
+        logger.warning("⚠️  Startup validation not available - skipping dependency checks")
     
     # 🔒 Start RACE-SAFE SQS message processor if available
     processor_task = None

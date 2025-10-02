@@ -6,6 +6,10 @@ __pycache__/
 # Environment variables
 .env
 .env.*
+.env.local
+.env.development
+.env.staging
+.env.production
 
 # VS Code
 .vscode/

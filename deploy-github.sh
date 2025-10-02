@@ -42,10 +42,16 @@ echo "🔗 GitHub Connection: $GITHUB_CONNECTION_ARN"
 echo "🌐 Default VPC: $DEFAULT_VPC_ID"
 echo "🔒 Allowed CIDR: $ALLOWED_CIDR"
 
-# Validate required environment variables
+# Validate required environment variables for CloudFormation deployment
 if [ -z "$WHATSAPP_TOKEN" ] || [ -z "$VERIFY_TOKEN" ] || [ -z "$WHATSAPP_PHONE_NUMBER_ID" ]; then
     echo "❌ Error: Required environment variables not set!"
     echo "Please set: WHATSAPP_TOKEN, VERIFY_TOKEN, and WHATSAPP_PHONE_NUMBER_ID"
+    echo ""
+    echo "⚠️  SECURITY NOTE: These will be stored in AWS Secrets Manager and then you should:"
+    echo "1. Revoke the current tokens in Meta Business Suite" 
+    echo "2. Generate new tokens"
+    echo "3. Update the secret in AWS Secrets Manager"
+    echo "4. Remove these from your local environment"
     echo ""
     echo "Example:"
     echo "export WHATSAPP_TOKEN='your_token_here'"
@@ -240,9 +246,17 @@ if [ $? -eq 0 ]; then
     echo "2. Wait for deployment to complete (check AWS App Runner Console)"
     echo "3. Create the IAM database user:"
     echo "   ./scripts/create-iam-db-user.sh $ENVIRONMENT"
-    echo "4. Set up your WhatsApp webhook URL using the App Runner service URL above"
-    echo "5. Test the health endpoint: ${SERVICE_URL}/health"
-    echo "6. Monitor logs in CloudWatch: /aws/apprunner/whatsapp-api-$ENVIRONMENT"
+    echo "4. 🔐 SECURITY: Update credentials in AWS Secrets Manager:"
+    echo "   ./scripts/update-whatsapp-credentials.sh $ENVIRONMENT $AWS_REGION"
+    echo "5. Set up your WhatsApp webhook URL using the App Runner service URL above"
+    echo "6. Test the health endpoint: ${SERVICE_URL}/health"
+    echo "7. Monitor logs in CloudWatch: /aws/apprunner/whatsapp-api-$ENVIRONMENT"
+    echo ""
+    echo "⚠️  CRITICAL SECURITY REMINDER:"
+    echo "   - The credentials used in this deployment will be stored in AWS Secrets Manager"
+    echo "   - After deployment, IMMEDIATELY revoke the old tokens in Meta Business Suite"
+    echo "   - Generate new tokens and update them using the credentials update script"
+    echo "   - Remove tokens from your local environment: unset WHATSAPP_TOKEN VERIFY_TOKEN WHATSAPP_PHONE_NUMBER_ID"
     
     if [ "$DEPLOY_LAMBDA_SUCCESS" = true ]; then
         echo ""

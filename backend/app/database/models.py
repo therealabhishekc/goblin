@@ -8,7 +8,13 @@ from sqlalchemy.sql import func
 from datetime import datetime
 import uuid
 
-from .connection import Base
+# DEPRECATED: This models file has been replaced by individual model files in app/models/
+# Use the newer model files instead:
+# - app/models/user.py (UserProfileDB)
+# - app/models/whatsapp.py (WhatsAppMessageDB)
+# - app/models/business.py (BusinessMetricsDB, MessageTemplateDB)
+
+from app.core.database import Base
 
 class UserProfile(Base):
     """User profile table for customer management"""

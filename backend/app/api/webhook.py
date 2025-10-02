@@ -27,6 +27,13 @@ from app.models.whatsapp import WhatsAppWebhookPayload
 from app.config import get_settings
 # 🔒 Import race-safe DynamoDB functions
 from app.dynamodb_client import store_message_id_atomic
+# Import startup validation for readiness checks
+try:
+    from app.services.startup_validator import is_application_ready
+    STARTUP_VALIDATION_AVAILABLE = True
+except ImportError:
+    is_application_ready = None
+    STARTUP_VALIDATION_AVAILABLE = False
 
 router = APIRouter(prefix="/webhook", tags=["WhatsApp Webhook"])
 
@@ -88,6 +95,19 @@ async def process_webhook(
     start_time = time.time()
     
     try:
+        # 🔒 STEP 0: Check application readiness before processing
+        if STARTUP_VALIDATION_AVAILABLE and is_application_ready and not is_application_ready():
+            logger.error(f"❌ Webhook {webhook_id}: Application not ready - critical dependencies unavailable")
+            return JSONResponse(
+                content={
+                    "status": "service_unavailable",
+                    "message": "Application dependencies not available",
+                    "webhook_id": webhook_id,
+                    "timestamp": time.time()
+                },
+                status_code=503
+            )
+        
         # Parse incoming payload
         payload = await request.json()
         logger.info(f"📥 Webhook {webhook_id}: Processing incoming payload")
