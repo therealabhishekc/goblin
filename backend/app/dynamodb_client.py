@@ -76,7 +76,7 @@ def store_message_id_atomic(message_id: str, ttl_hours: int = 24) -> Dict[str, A
                 "status": "received",           # Initial status
                 "processing_id": processing_id, # Unique processing identifier
                 "processing_started_at": now,
-                "processor_id": None,          # Will be set when claimed for processing
+                # processor_id is NOT set initially - will be added when claimed for processing
                 "webhook_count": 1             # Track webhook duplicate attempts
             },
             # 🔒 CRITICAL: This condition prevents race conditions
@@ -158,13 +158,15 @@ def claim_message_processing(message_id: str, processor_id: str) -> bool:
                     processing_claimed_at = :claimed_at
             """,
             # 🔒 CRITICAL CONDITIONS: Prevents processor race conditions
-            ConditionExpression="#status = :received AND attribute_not_exists(processor_id)",
+            # Handle both cases: processor_id doesn't exist OR processor_id is NULL
+            ConditionExpression="#status = :received AND (attribute_not_exists(processor_id) OR processor_id = :null_value)",
             ExpressionAttributeNames={"#status": "status"},
             ExpressionAttributeValues={
                 ":processing": "processing",
                 ":received": "received",
                 ":processor_id": processor_id,
-                ":claimed_at": datetime.utcnow().isoformat()
+                ":claimed_at": datetime.utcnow().isoformat(),
+                ":null_value": None
             }
         )
         
