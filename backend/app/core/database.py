@@ -28,10 +28,8 @@ from sqlalchemy.orm import sessionmaker, Session
 from typing import Generator
 from contextlib import contextmanager
 from botocore.exceptions import ClientError
-import logging
 from urllib.parse import quote_plus
-
-logger = logging.getLogger(__name__)
+from app.core.logging import logger
 
 # Database Configuration
 DB_HOST = os.getenv("DB_HOST", "localhost")

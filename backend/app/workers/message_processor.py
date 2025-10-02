@@ -10,7 +10,6 @@ Race Condition Prevention Features:
 """
 import asyncio
 import json
-import logging
 import signal
 import time
 import uuid

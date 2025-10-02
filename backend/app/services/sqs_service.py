@@ -10,7 +10,6 @@ Race Condition Prevention Features:
 """
 import asyncio
 import json
-import logging
 import time
 import uuid
 from typing import Dict, Any, List, Optional
@@ -21,8 +20,7 @@ import aioboto3
 from botocore.exceptions import ClientError
 
 from app.config import get_settings
-
-logger = logging.getLogger(__name__)
+from app.core.logging import logger
 settings = get_settings()
 
 class QueueType(Enum):

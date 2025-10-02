@@ -3,7 +3,7 @@ Application constants and configuration values.
 """
 
 # WhatsApp API Constants
-WHATSAPP_API_VERSION = "v18.0"
+WHATSAPP_API_VERSION = "v22.0"  # Default version, can be overridden in config
 WHATSAPP_BASE_URL = "https://graph.facebook.com"
 
 # Message Types

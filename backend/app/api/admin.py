@@ -3,15 +3,13 @@ Admin API endpoints for Lambda archival management
 """
 import boto3
 import json
-import logging
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from typing import Dict, Any, Optional
 from datetime import datetime
 from botocore.exceptions import ClientError
 
 from app.config import get_settings
-
-logger = logging.getLogger(__name__)
+from app.core.logging import logger
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 class LambdaArchivalService:

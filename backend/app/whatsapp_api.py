@@ -4,11 +4,16 @@ from typing import Dict, Any, Optional, List
 
 from app.core.logging import logger
 from app.config import get_settings
+from app.utils.constants import WHATSAPP_BASE_URL
 
 # Get settings instance
 settings = get_settings()
 WHATSAPP_TOKEN = settings.whatsapp_token
 PHONE_NUMBER_ID = settings.whatsapp_phone_number_id or settings.phone_number_id
+
+def _get_whatsapp_api_url() -> str:
+    """Get the WhatsApp API URL with configurable version"""
+    return f"{WHATSAPP_BASE_URL}/{settings.whatsapp_api_version}/{PHONE_NUMBER_ID}/messages"
 
 def _validate_whatsapp_config():
     """Validate WhatsApp configuration before API calls"""
@@ -27,7 +32,7 @@ async def send_template_message(to: str, template_name: str, parameters: Optiona
     # Validate configuration
     _validate_whatsapp_config()
     
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = _get_whatsapp_api_url()
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -67,7 +72,7 @@ async def send_text_message(to: str, text: str) -> Dict[str, Any]:
     """Send a WhatsApp text message"""
     _validate_whatsapp_config()
     
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = _get_whatsapp_api_url()
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -92,7 +97,7 @@ async def send_text_message(to: str, text: str) -> Dict[str, Any]:
 
 async def send_image_message(to: str, image_url: str, caption: Optional[str] = None) -> Dict[str, Any]:
     """Send a WhatsApp image message"""
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = _get_whatsapp_api_url()
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -122,7 +127,7 @@ async def send_image_message(to: str, image_url: str, caption: Optional[str] = N
 
 async def send_document_message(to: str, document_url: str, filename: str, caption: Optional[str] = None) -> Dict[str, Any]:
     """Send a WhatsApp document message (PDFs, Word docs, etc.)"""
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = _get_whatsapp_api_url()
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -152,7 +157,7 @@ async def send_document_message(to: str, document_url: str, filename: str, capti
 
 async def send_audio_message(to: str, audio_url: str) -> Dict[str, Any]:
     """Send a WhatsApp audio message"""
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = _get_whatsapp_api_url()
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -177,7 +182,7 @@ async def send_audio_message(to: str, audio_url: str) -> Dict[str, Any]:
 
 async def send_video_message(to: str, video_url: str, caption: Optional[str] = None) -> Dict[str, Any]:
     """Send a WhatsApp video message"""
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = _get_whatsapp_api_url()
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"
@@ -207,7 +212,7 @@ async def send_video_message(to: str, video_url: str, caption: Optional[str] = N
 
 async def send_location_message(to: str, latitude: float, longitude: float, name: Optional[str] = None, address: Optional[str] = None) -> Dict[str, Any]:
     """Send a WhatsApp location message"""
-    url = f"https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages"
+    url = _get_whatsapp_api_url()
     headers = {
         "Authorization": f"Bearer {WHATSAPP_TOKEN}",
         "Content-Type": "application/json"

@@ -10,9 +10,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Any
 from sqlalchemy import text
 from botocore.exceptions import ClientError, NoCredentialsError
-import logging
-
-logger = logging.getLogger(__name__)
+from app.core.logging import logger
 
 class S3Service:
     """Unified S3 service for archival, retrieval, and validation"""
