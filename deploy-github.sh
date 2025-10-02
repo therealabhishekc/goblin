@@ -79,7 +79,11 @@ fi
 ENV_FILE="deploy/environments/lambda-archival.env"
 if [ -f "$ENV_FILE" ]; then
     echo "📋 Loading archival configuration from: $ENV_FILE"
+    # Preserve the command line ENVIRONMENT parameter
+    ORIGINAL_ENVIRONMENT="$ENVIRONMENT"
     source "$ENV_FILE"
+    # Restore the command line ENVIRONMENT parameter
+    ENVIRONMENT="$ORIGINAL_ENVIRONMENT"
 fi
 
 # Deploy CloudFormation stack

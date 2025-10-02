@@ -295,8 +295,7 @@ Resources:
   DefaultVPCSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'whatsapp-rds-sg-${Environment}'
-      GroupDescription: Security group for PostgreSQL access
+      GroupDescription: !Sub 'Security group for PostgreSQL access - ${Environment}'
       VpcId: !Ref DefaultVPCId
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -316,8 +315,7 @@ Resources:
   PostgreSQLParameterGroup:
     Type: AWS::RDS::DBParameterGroup
     Properties:
-      DBParameterGroupName: !Sub 'whatsapp-postgres-params-${Environment}'
-      Description: Parameter group for WhatsApp PostgreSQL with SSL enforcement
+      Description: !Sub 'Parameter group for WhatsApp PostgreSQL with SSL enforcement - ${Environment}'
       Family: postgres15
       Parameters:
         rds.force_ssl: "1"  # Enforce SSL connections
@@ -344,9 +342,9 @@ Resources:
       DBInstanceIdentifier: !Sub 'whatsapp-postgres-${Environment}'
       DBName: !Sub 'whatsapp_business_${Environment}'
       Engine: postgres
-      EngineVersion: '15.8'
+      EngineVersion: '15.10'
       DBInstanceClass: !If [IsProduction, db.t3.small, db.t3.micro]
-      AllocatedStorage: !If [IsProduction, 100, 20]
+      AllocatedStorage: !If [IsProduction, 20, 20]
       StorageType: gp3
       MasterUsername: postgres
       ManageMasterUserPassword: true
@@ -358,10 +356,10 @@ Resources:
       DBParameterGroupName: !Ref PostgreSQLParameterGroup  # Enforce SSL
       # DBSubnetGroupName: removed - using default VPC default subnet group
       BackupRetentionPeriod: !If [IsProduction, 30, 7]
-      MultiAZ: !If [IsProduction, true, false]
+      MultiAZ: !If [IsProduction, false, false]
       PubliclyAccessible: true  # Required for App Runner to connect without VPC
       StorageEncrypted: true
-      DeletionProtection: !If [IsProduction, true, false]
+      DeletionProtection: !If [IsProduction, false, false]
       Tags:
         - Key: Name
           Value: !Sub 'whatsapp-postgres-${Environment}'
@@ -491,9 +489,9 @@ Resources:
                 - Name: AWS_REGION
                   Value: !Ref AWS::Region
                 - Name: LOG_LEVEL
-                  Value: !If [IsProduction, 'INFO', 'DEBUG']
-                - Name: DATABASE_URL
-                  Value: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
+                  Value: !If [IsProduction, 'INFO', 'INFO']
+                # - Name: DATABASE_URL
+                #   Value: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
                 - Name: DB_HOST
                   Value: !GetAtt PostgreSQLDB.Endpoint.Address
                 - Name: DB_PORT
@@ -632,7 +630,6 @@ Resources:
               }
       Timeout: 900  # 15 minutes
       MemorySize: 1024
-      ReservedConcurrencyLimit: 1
       Environment:
         Variables:
           S3_DATA_BUCKET: !Ref WhatsAppDataBucket
@@ -674,7 +671,6 @@ Resources:
               }
       Timeout: 900  # 15 minutes
       MemorySize: 2048
-      ReservedConcurrencyLimit: 1
       Environment:
         Variables:
           S3_DATA_BUCKET: !Ref WhatsAppDataBucket
