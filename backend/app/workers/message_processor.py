@@ -44,7 +44,7 @@ class MessageProcessor:
     def __init__(self):
         self.processor_id = str(uuid.uuid4())  # Unique processor instance ID
         self.running = False
-        self.whatsapp_service = None  # Will be initialized when processing starts
+        # Each message will get its own WhatsAppService instance with fresh DB session
         
         # 🔒 Race-safe statistics tracking
         self.stats = {
@@ -64,8 +64,8 @@ class MessageProcessor:
         self.running = True
         self.stats["start_time"] = time.time()
         
-        # Initialize WhatsAppService now that database is ready
-        self.whatsapp_service = WhatsAppService()
+        # NOTE: Don't create a single WhatsAppService here - create fresh instances
+        # per message to avoid transaction state pollution
         
         logger.info(f"🚀 Message processor {self.processor_id} started")
         
@@ -280,62 +280,67 @@ class MessageProcessor:
         message_type = message.get("type", "unknown")
         phone_number = message.get("from")
         
+        # 🔒 Create a fresh WhatsAppService with new DB session for this message
+        # This prevents transaction state pollution between messages
         try:
-            # Handle different message types
-            if message_type == "text":
-                text_body = message.get("text", {}).get("body", "")
-                result = await self.whatsapp_service.process_text_message(
-                    phone_number=phone_number,
-                    text_content=text_body,
-                    contact_info=contact,
+            with get_db_session() as db:
+                whatsapp_service = WhatsAppService(db_session=db)
+                
+                # Handle different message types
+                if message_type == "text":
+                    text_body = message.get("text", {}).get("body", "")
+                    result = await whatsapp_service.process_text_message(
+                        phone_number=phone_number,
+                        text_content=text_body,
+                        contact_info=contact,
                     processing_metadata=metadata
                 )
                 
-            elif message_type == "interactive":
-                interactive_data = message.get("interactive", {})
-                result = await self.whatsapp_service.process_interactive_message(
-                    phone_number=phone_number,
-                    interactive_data=interactive_data,
-                    contact_info=contact,
-                    processing_metadata=metadata
-                )
+                elif message_type == "interactive":
+                    interactive_data = message.get("interactive", {})
+                    result = await whatsapp_service.process_interactive_message(
+                        phone_number=phone_number,
+                        interactive_data=interactive_data,
+                        contact_info=contact,
+                        processing_metadata=metadata
+                    )
+                    
+                elif message_type in ["image", "document", "audio", "video"]:
+                    media_data = message.get(message_type, {})
+                    result = await whatsapp_service.process_media_message(
+                        phone_number=phone_number,
+                        media_type=message_type,
+                        media_data=media_data,
+                        contact_info=contact,
+                        processing_metadata=metadata
+                    )
+                    
+                elif message_type == "location":
+                    location_data = message.get("location", {})
+                    result = await whatsapp_service.process_location_message(
+                        phone_number=phone_number,
+                        location_data=location_data,
+                        contact_info=contact,
+                        processing_metadata=metadata
+                    )
+                    
+                else:
+                    logger.warning(f"⚠️ Unsupported message type: {message_type} from {phone_number}")
+                    result = {
+                        "status": "unsupported",
+                        "message_type": message_type,
+                        "action": "ignored"
+                    }
                 
-            elif message_type in ["image", "document", "audio", "video"]:
-                media_data = message.get(message_type, {})
-                result = await self.whatsapp_service.process_media_message(
-                    phone_number=phone_number,
-                    media_type=message_type,
-                    media_data=media_data,
-                    contact_info=contact,
-                    processing_metadata=metadata
-                )
-                
-            elif message_type == "location":
-                location_data = message.get("location", {})
-                result = await self.whatsapp_service.process_location_message(
-                    phone_number=phone_number,
-                    location_data=location_data,
-                    contact_info=contact,
-                    processing_metadata=metadata
-                )
-                
-            else:
-                logger.warning(f"⚠️ Unsupported message type: {message_type} from {phone_number}")
-                result = {
-                    "status": "unsupported",
+                return {
+                    "processing_result": result,
                     "message_type": message_type,
-                    "action": "ignored"
+                    "phone_number": phone_number,
+                    "processing_id": processing_id,
+                    "processed_at": datetime.utcnow().isoformat(),
+                    "processor_id": self.processor_id
                 }
-            
-            return {
-                "processing_result": result,
-                "message_type": message_type,
-                "phone_number": phone_number,
-                "processing_id": processing_id,
-                "processed_at": datetime.utcnow().isoformat(),
-                "processor_id": self.processor_id
-            }
-            
+                
         except Exception as e:
             logger.error(f"❌ WhatsApp message handling failed for {phone_number}: {e}")
             raise  # Re-raise to be handled by the caller
