@@ -20,7 +20,8 @@ from datetime import datetime
 
 from app.services.sqs_service import sqs_service, QueueType, SQSMessage
 from app.services.whatsapp_service import WhatsAppService
-from app.core.database import get_db_session
+from app.core.database import get_db_session, SessionLocal
+from app.repositories.message_repository import MessageRepository
 from app.core.logging import logger
 from app.config import get_settings
 # 🔒 Import race-safe DynamoDB functions
