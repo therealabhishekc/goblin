@@ -27,8 +27,32 @@ def _validate_whatsapp_config():
         raise ValueError("PHONE_NUMBER_ID or WHATSAPP_PHONE_NUMBER_ID environment variable is required")
 
 
-async def send_template_message(to: str, template_name: str, parameters: Optional[List[Dict]] = None):
-    """Send a WhatsApp template message with optional parameters"""
+async def send_template_message(
+    to: str, 
+    template_name: str, 
+    language_code: str = "en_US",
+    components: Optional[List[Dict[str, Any]]] = None,
+    parameters: Optional[List[Dict]] = None
+):
+    """
+    Send a WhatsApp template message with full component support
+    
+    Args:
+        to: Recipient phone number
+        template_name: Name of the approved WhatsApp template
+        language_code: Language code (default: en_US). Examples: en, es, fr, de, pt_BR, etc.
+        components: Full component structure for complex templates (headers, body, buttons)
+        parameters: Simplified body parameters (backward compatibility)
+    
+    Component Structure Examples:
+        - Header with text: {"type": "header", "parameters": [{"type": "text", "text": "value"}]}
+        - Header with image: {"type": "header", "parameters": [{"type": "image", "image": {"link": "url"}}]}
+        - Body with params: {"type": "body", "parameters": [{"type": "text", "text": "value"}]}
+        - Button with URL: {"type": "button", "sub_type": "url", "index": 0, "parameters": [...]}
+    
+    Returns:
+        WhatsApp API response with message ID
+    """
     
     # Validate configuration
     _validate_whatsapp_config()
@@ -41,14 +65,21 @@ async def send_template_message(to: str, template_name: str, parameters: Optiona
     
     template_data = {
         "name": template_name,
-        "language": {"code": "en_US"}
+        "language": {"code": language_code}
     }
     
-    if parameters:
+    # Handle backward compatibility: if simple parameters provided, convert to body component
+    if parameters and not components:
         template_data["components"] = [{
             "type": "body",
             "parameters": parameters
         }]
+        logger.debug(f"Converting simple parameters to body component for template {template_name}")
+    
+    # Use full component structure if provided
+    elif components:
+        template_data["components"] = components
+        logger.debug(f"Using full component structure for template {template_name}: {len(components)} components")
     
     payload = {
         "messaging_product": "whatsapp",
@@ -59,11 +90,27 @@ async def send_template_message(to: str, template_name: str, parameters: Optiona
     
     try:
         async with httpx.AsyncClient() as client:
+            logger.debug(f"Sending template {template_name} to {to} with language {language_code}")
+            logger.debug(f"Template payload: {json.dumps(payload, indent=2)}")
+            
             response = await client.post(url, headers=headers, json=payload)
+            
+            # Log response for debugging
+            if response.status_code != 200:
+                error_body = response.text
+                logger.error(f"❌ WhatsApp API Error {response.status_code} for template {template_name}: {error_body}")
+                logger.error(f"Request payload was: {json.dumps(payload, indent=2)}")
+            
             response.raise_for_status()
             result = response.json()
-            logger.info(f"✅ Template message sent to {to}: {result.get('messages', [{}])[0].get('id', 'unknown_id')}")
+            message_id = result.get('messages', [{}])[0].get('id', 'unknown_id')
+            logger.info(f"✅ Template message '{template_name}' sent to {to}: {message_id}")
             return result
+            
+    except httpx.HTTPStatusError as e:
+        logger.error(f"❌ Failed to send template {template_name} to {to}: HTTP {e.response.status_code}")
+        logger.error(f"Response body: {e.response.text}")
+        raise
     except Exception as e:
         logger.error(f"❌ Failed to send template message to {to}: {e}")
         raise
@@ -317,10 +364,20 @@ async def send_whatsapp_message(to: str, message_data: Dict[str, Any]) -> Dict[s
             
         elif message_type == "template":
             template_name = message_data.get("template_name", message_data.get("template"))
+            language_code = message_data.get("language_code", message_data.get("language", "en_US"))
+            components = message_data.get("components")
             parameters = message_data.get("parameters")
+            
             if not template_name:
                 raise ValueError("Template name is required for template messages")
-            return await send_template_message(to, template_name, parameters)
+            
+            return await send_template_message(
+                to=to,
+                template_name=template_name,
+                language_code=language_code,
+                components=components,
+                parameters=parameters
+            )
             
         else:
             raise ValueError(f"Unsupported message type: {message_type}")

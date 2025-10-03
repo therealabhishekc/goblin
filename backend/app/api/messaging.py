@@ -43,10 +43,93 @@ class ImageMessageRequest(BaseModel):
     priority: Optional[str] = Field("normal", description="Message priority")
 
 class TemplateMessageRequest(BaseModel):
-    """Request for template messages"""
+    """
+    Request for template messages - Supports full WhatsApp Business API template structure
+    
+    Examples:
+    
+    1. Simple text template (backward compatible):
+       {
+           "phone_number": "14694652751",
+           "template_name": "hello_world",
+           "parameters": [{"type": "text", "text": "John"}]
+       }
+    
+    2. Template with header image and body:
+       {
+           "phone_number": "14694652751",
+           "template_name": "welcome_image",
+           "language_code": "en",
+           "components": [
+               {
+                   "type": "header",
+                   "parameters": [{
+                       "type": "image",
+                       "image": {"link": "https://example.com/image.jpg"}
+                   }]
+               },
+               {
+                   "type": "body",
+                   "parameters": [
+                       {"type": "text", "text": "John"},
+                       {"type": "text", "text": "Doe"}
+                   ]
+               }
+           ]
+       }
+    
+    3. Template with dynamic button URL:
+       {
+           "phone_number": "14694652751",
+           "template_name": "order_confirmation",
+           "language_code": "en_US",
+           "components": [
+               {
+                   "type": "body",
+                   "parameters": [{"type": "text", "text": "ORDER-12345"}]
+               },
+               {
+                   "type": "button",
+                   "sub_type": "url",
+                   "index": 0,
+                   "parameters": [{"type": "text", "text": "ORDER-12345"}]
+               }
+           ]
+       }
+    
+    4. Authentication/OTP template:
+       {
+           "phone_number": "14694652751",
+           "template_name": "auth_otp",
+           "language_code": "en",
+           "components": [
+               {
+                   "type": "body",
+                   "parameters": [{"type": "text", "text": "123456"}]
+               },
+               {
+                   "type": "button",
+                   "sub_type": "url",
+                   "index": 0,
+                   "parameters": [{"type": "text", "text": "123456"}]
+               }
+           ]
+       }
+    """
     phone_number: str = Field(..., description="Phone number to send message to")
-    template_name: str = Field(..., description="Name of the WhatsApp template")
-    parameters: Optional[List[Dict[str, Any]]] = Field(None, description="Template parameters")
+    template_name: str = Field(..., description="Name of the approved WhatsApp template")
+    language_code: Optional[str] = Field(
+        "en_US", 
+        description="Language code for the template (en, es, pt_BR, fr, de, etc.)"
+    )
+    components: Optional[List[Dict[str, Any]]] = Field(
+        None, 
+        description="Full component structure (header, body, buttons) for complex templates"
+    )
+    parameters: Optional[List[Dict[str, Any]]] = Field(
+        None, 
+        description="Simple body parameters (backward compatibility). Ignored if components provided."
+    )
     priority: Optional[str] = Field("normal", description="Message priority")
 
 class AnalyticsEventRequest(BaseModel):
@@ -219,8 +302,19 @@ async def send_image_message_api(request: ImageMessageRequest):
 @router.post("/send/template")
 async def send_template_message_api(request: TemplateMessageRequest):
     """
-    Send a WhatsApp template message
+    Send a WhatsApp template message with full component support
     ⚠️ Only sends to SUBSCRIBED users
+    
+    Supports:
+    - ✅ All template categories (Marketing, Utility, Authentication)
+    - ✅ Multiple languages (en, es, pt_BR, fr, de, etc.)
+    - ✅ Header components (text, image, video, document)
+    - ✅ Body parameters
+    - ✅ Button parameters (URL, phone number)
+    - ✅ Authentication/OTP templates
+    - ✅ Backward compatible with simple parameter format
+    
+    See TemplateMessageRequest model for examples.
     """
     try:
         # ⭐ CHECK SUBSCRIPTION STATUS ⭐
@@ -248,16 +342,23 @@ async def send_template_message_api(request: TemplateMessageRequest):
             "priority": request.priority,
             "requested_at": int(time.time()),
             "source": "template_api_endpoint",
-            "template_name": request.template_name
+            "template_name": request.template_name,
+            "language_code": request.language_code
         }
         
         message_data = {
             "type": "template",
-            "template_name": request.template_name
+            "template_name": request.template_name,
+            "language_code": request.language_code or "en_US"
         }
         
-        if request.parameters:
+        # Add components (full structure) or parameters (simple format)
+        if request.components:
+            message_data["components"] = request.components
+            logger.debug(f"Sending template with {len(request.components)} components")
+        elif request.parameters:
             message_data["parameters"] = request.parameters
+            logger.debug(f"Sending template with {len(request.parameters)} body parameters")
         
         message_id = await send_outgoing_message(
             phone_number=request.phone_number,
@@ -266,11 +367,14 @@ async def send_template_message_api(request: TemplateMessageRequest):
         )
         
         if message_id:
-            logger.info(f"✅ Template message queued: {message_id} to {request.phone_number}")
+            logger.info(f"✅ Template message queued: {message_id} to {request.phone_number} (template: {request.template_name}, lang: {request.language_code})")
             
             await send_analytics_event("template_message_queued", {
                 "phone_number": request.phone_number,
                 "template_name": request.template_name,
+                "language_code": request.language_code,
+                "has_components": request.components is not None,
+                "component_count": len(request.components) if request.components else 0,
                 "priority": request.priority,
                 "queue_message_id": message_id
             })
@@ -281,6 +385,7 @@ async def send_template_message_api(request: TemplateMessageRequest):
                 "phone_number": request.phone_number,
                 "message_type": "template",
                 "template_name": request.template_name,
+                "language_code": request.language_code,
                 "subscription_status": "subscribed",
                 "estimated_processing_time": "1-5 minutes"
             }
