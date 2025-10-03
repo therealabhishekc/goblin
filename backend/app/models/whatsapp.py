@@ -32,6 +32,8 @@ class MessageStatus(str, Enum):
     READ = "read"
     FAILED = "failed"
     SENT = "sent"
+    PROCESSING = "processing"
+    PROCESSED = "processed"
 
 # Pydantic Models for API
 class WhatsAppMessage(BaseModel):

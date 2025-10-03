@@ -155,7 +155,7 @@ class MessageProcessor:
                     processing_id=processing_id
                 )
                 
-                # 🔒 Step 4: Atomically mark as completed
+                # 🔒 Step 4: Atomically mark as completed in DynamoDB
                 update_success = update_message_status_atomic(
                     message_id=message_id,
                     status="completed",
@@ -164,6 +164,14 @@ class MessageProcessor:
                 )
                 
                 if update_success:
+                    # 🆕 Update RDS status to "processed"
+                    try:
+                        await self._update_rds_status(message_id, "processed")
+                        logger.info(f"✅ RDS status updated to 'processed' for message: {message_id}")
+                    except Exception as rds_error:
+                        logger.error(f"⚠️ Failed to update RDS status: {rds_error}")
+                        # Don't fail processing if RDS update fails
+                    
                     # 🗑️ Delete from SQS only after successful processing and status update
                     await sqs_service.delete_message(QueueType.INCOMING, sqs_message.receipt_handle)
                     
@@ -180,7 +188,7 @@ class MessageProcessor:
                     # Don't delete from SQS - let it retry
                 
             except Exception as processing_error:
-                # 🔒 Step 4b: Mark as failed with atomic update
+                # 🔒 Step 4b: Mark as failed with atomic update in DynamoDB
                 logger.error(f"❌ Processing failed for {message_id}: {processing_error}")
                 
                 update_message_status_atomic(
@@ -189,6 +197,13 @@ class MessageProcessor:
                     processor_id=self.processor_id,
                     error_message=str(processing_error)
                 )
+                
+                # 🆕 Update RDS status to "failed"
+                try:
+                    await self._update_rds_status(message_id, "failed")
+                    logger.info(f"✅ RDS status updated to 'failed' for message: {message_id}")
+                except Exception as rds_error:
+                    logger.error(f"⚠️ Failed to update RDS status to failed: {rds_error}")
                 
                 async with self._stats_lock:
                     self.stats["error_count"] += 1
@@ -226,6 +241,32 @@ class MessageProcessor:
                 await sqs_service.change_message_visibility(queue_type, receipt_handle, visibility_extension)
         except Exception as e:
             logger.warning(f"⚠️ Visibility heartbeat failed: {e}")
+    
+    async def _update_rds_status(self, message_id: str, status: str):
+        """
+        Update message status in RDS database
+        
+        Args:
+            message_id: WhatsApp message ID
+            status: New status ('processed', 'failed')
+        """
+        db = SessionLocal()
+        try:
+            message_repo = MessageRepository(db)
+            message = message_repo.get_by_message_id(message_id)
+            
+            if message:
+                message.status = status
+                db.commit()
+                db.refresh(message)
+                logger.debug(f"✅ RDS status updated: {message_id} -> {status}")
+            else:
+                logger.warning(f"⚠️ Message not found in RDS for status update: {message_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to update RDS status for {message_id}: {e}")
+            raise
+        finally:
+            db.close()
     
     async def handle_whatsapp_message(
         self, 
