@@ -145,10 +145,12 @@ class WhatsAppService:
             message_data = {
                 "message_id": processing_metadata.get("message_id"),
                 "from_phone": phone_number,
+                "to_phone": "business",
                 "message_type": "text",
                 "content": text_content,
                 "timestamp": datetime.utcnow(),
-                "status": "processing"
+                "status": "processing",
+                "direction": "incoming"
             }
             
             # Create or update user profile
@@ -197,10 +199,12 @@ class WhatsAppService:
             message_data = {
                 "message_id": processing_metadata.get("message_id"),
                 "from_phone": phone_number,
+                "to_phone": "business",
                 "message_type": "interactive",
                 "content": str(interactive_data),
                 "timestamp": datetime.utcnow(),
-                "status": "processing"
+                "status": "processing",
+                "direction": "incoming"
             }
             
             # Create or update user profile
@@ -235,12 +239,14 @@ class WhatsAppService:
             message_data = {
                 "message_id": processing_metadata.get("message_id"),
                 "from_phone": phone_number,
+                "to_phone": "business",
                 "message_type": media_type,
                 "content": media_data.get("caption", ""),
                 "media_url": media_data.get("url"),
                 "media_type": media_data.get("mime_type"),
                 "timestamp": datetime.utcnow(),
-                "status": "processing"
+                "status": "processing",
+                "direction": "incoming"
             }
             
             # Create or update user profile
@@ -506,7 +512,7 @@ class WhatsAppService:
                 "message_type": msg_data.get("type", "text"),
                 "content": msg_data.get("text", {}).get("body") if msg_data.get("type") == "text" else None,
                 "timestamp": datetime.utcnow(),
-                "status": "received"
+                "status": "processing"
             }
         except (IndexError, KeyError):
             return {}

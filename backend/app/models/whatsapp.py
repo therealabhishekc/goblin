@@ -46,7 +46,7 @@ class WhatsAppMessage(BaseModel):
     media_url: Optional[str] = Field(None, description="Media file URL")
     media_type: Optional[str] = Field(None, description="MIME type of media")
     media_size: Optional[int] = Field(None, description="Media file size in bytes")
-    status: MessageStatus = Field(MessageStatus.RECEIVED, description="Message status")
+    status: MessageStatus = Field(MessageStatus.PROCESSING, description="Message status")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 class WhatsAppWebhookPayload(BaseModel):
