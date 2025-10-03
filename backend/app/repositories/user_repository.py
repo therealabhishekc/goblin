@@ -47,3 +47,58 @@ class UserRepository(BaseRepository[UserProfile]):
         return self.db.query(self.model_class).filter(
             self.model_class.tags.op('&&')(tags)  # PostgreSQL array overlap operator
         ).all()
+    
+    def unsubscribe_user(self, phone_number: str) -> Optional[UserProfileDB]:
+        """
+        Unsubscribe user from template messages (STOP command)
+        Does NOT affect automated replies
+        """
+        from datetime import datetime
+        from app.core.logging import logger
+        
+        user = self.get_by_phone_number(phone_number)
+        if user:
+            user.subscription = "unsubscribed"
+            user.subscription_updated_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(user)
+            logger.info(f"📵 User {phone_number} unsubscribed from template messages")
+        return user
+    
+    def resubscribe_user(self, phone_number: str) -> Optional[UserProfileDB]:
+        """
+        Resubscribe user to template messages (START command)
+        """
+        from datetime import datetime
+        from app.core.logging import logger
+        
+        user = self.get_by_phone_number(phone_number)
+        if user:
+            user.subscription = "subscribed"
+            user.subscription_updated_at = datetime.utcnow()
+            self.db.commit()
+            self.db.refresh(user)
+            logger.info(f"✅ User {phone_number} resubscribed to template messages")
+        return user
+    
+    def is_user_subscribed(self, phone_number: str) -> bool:
+        """
+        Check if user is subscribed to template messages
+        Returns True if subscribed or user doesn't exist (default to subscribed)
+        """
+        user = self.get_by_phone_number(phone_number)
+        if not user:
+            return True  # Default to subscribed for new users
+        return user.subscription == "subscribed"
+    
+    def get_subscribed_users(self) -> List[UserProfileDB]:
+        """Get all users who are subscribed to template messages"""
+        return self.db.query(self.model_class).filter(
+            self.model_class.subscription == "subscribed"
+        ).all()
+    
+    def get_unsubscribed_users(self) -> List[UserProfileDB]:
+        """Get all users who are unsubscribed from template messages"""
+        return self.db.query(self.model_class).filter(
+            self.model_class.subscription == "unsubscribed"
+        ).all()

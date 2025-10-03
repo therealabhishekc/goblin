@@ -52,6 +52,31 @@ class ReplyAutomation:
     def _setup_default_rules(self):
         """Setup default reply rules"""
         
+        # STOP/START commands (HIGHEST PRIORITY - always processed first)
+        self.rules.extend([
+            ReplyRule(
+                name="unsubscribe_stop",
+                condition=r"^\s*(stop|unsubscribe|opt out|optout|cancel)\s*$",
+                reply_type="text",
+                reply_data={
+                    "type": "text",
+                    "content": "✅ You have been unsubscribed from promotional messages.\n\nYou will no longer receive marketing templates, but you can still message us anytime and we'll respond.\n\nReply START to resubscribe."
+                },
+                priority=20  # HIGHEST PRIORITY
+            ),
+            
+            ReplyRule(
+                name="resubscribe_start",
+                condition=r"^\s*(start|subscribe|opt in|optin|resume)\s*$",
+                reply_type="text",
+                reply_data={
+                    "type": "text",
+                    "content": "✅ Welcome back! You are now subscribed to promotional messages.\n\nYou'll receive important updates and offers from us.\n\nReply STOP anytime to unsubscribe."
+                },
+                priority=20  # HIGHEST PRIORITY
+            ),
+        ])
+        
         # Greeting rules
         self.rules.extend([
             ReplyRule(
@@ -177,12 +202,34 @@ class ReplyAutomation:
                 logger.info(f"No matching rule found for message: '{message_text[:50]}...'")
                 return None
             
+            # ⭐ HANDLE STOP/START COMMANDS (ALWAYS PROCESS THESE) ⭐
+            if matching_rule.name == "unsubscribe_stop":
+                await self._handle_unsubscribe(phone_number)
+                logger.info(f"📵 User {phone_number} sent STOP - unsubscribed from templates")
+                # Send confirmation message
+                return await self._send_automated_reply(
+                    phone_number, 
+                    matching_rule,
+                    message_context={"original_message": message_text, "user_context": user_context}
+                )
+            
+            if matching_rule.name == "resubscribe_start":
+                await self._handle_resubscribe(phone_number)
+                logger.info(f"✅ User {phone_number} sent START - resubscribed to templates")
+                # Send confirmation message
+                return await self._send_automated_reply(
+                    phone_number, 
+                    matching_rule,
+                    message_context={"original_message": message_text, "user_context": user_context}
+                )
+            
+            # ⭐ FOR ALL OTHER RULES: Automated replies always sent regardless of subscription ⭐
             # Check business hours for certain rules
             if matching_rule.name == "business_hours_closed" and self.business_hours.is_business_hours():
                 logger.info("Business hours - skipping closed hours message")
                 return None
             
-            # Generate and send reply
+            # Generate and send reply (NO SUBSCRIPTION CHECK HERE - replies always work)
             reply_message_id = await self._send_automated_reply(
                 phone_number, 
                 matching_rule,
@@ -261,6 +308,32 @@ class ReplyAutomation:
         except Exception as e:
             logger.error(f"❌ Error sending automated reply: {e}")
             return None
+    
+    async def _handle_unsubscribe(self, phone_number: str):
+        """Handle user unsubscribe request (STOP command)"""
+        from app.core.database import get_db_session
+        from app.repositories.user_repository import UserRepository
+        
+        try:
+            with get_db_session() as db:
+                user_repo = UserRepository(db)
+                user_repo.unsubscribe_user(phone_number)
+                logger.info(f"✅ User {phone_number} unsubscribed from template messages")
+        except Exception as e:
+            logger.error(f"❌ Failed to unsubscribe user {phone_number}: {e}")
+    
+    async def _handle_resubscribe(self, phone_number: str):
+        """Handle user resubscribe request (START command)"""
+        from app.core.database import get_db_session
+        from app.repositories.user_repository import UserRepository
+        
+        try:
+            with get_db_session() as db:
+                user_repo = UserRepository(db)
+                user_repo.resubscribe_user(phone_number)
+                logger.info(f"✅ User {phone_number} resubscribed to template messages")
+        except Exception as e:
+            logger.error(f"❌ Failed to resubscribe user {phone_number}: {e}")
     
     def add_custom_rule(self, rule: ReplyRule):
         """Add a custom reply rule"""

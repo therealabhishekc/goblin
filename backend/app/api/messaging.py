@@ -218,8 +218,32 @@ async def send_image_message_api(request: ImageMessageRequest):
 
 @router.post("/send/template")
 async def send_template_message_api(request: TemplateMessageRequest):
-    """Send a WhatsApp template message"""
+    """
+    Send a WhatsApp template message
+    ⚠️ Only sends to SUBSCRIBED users
+    """
     try:
+        # ⭐ CHECK SUBSCRIPTION STATUS ⭐
+        from app.core.database import get_db_session
+        from app.repositories.user_repository import UserRepository
+        
+        with get_db_session() as db:
+            user_repo = UserRepository(db)
+            is_subscribed = user_repo.is_user_subscribed(request.phone_number)
+        
+        if not is_subscribed:
+            logger.warning(f"📵 User {request.phone_number} is unsubscribed - template not sent")
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "status": "blocked",
+                    "message": "User has unsubscribed from template messages",
+                    "phone_number": request.phone_number,
+                    "reason": "User sent STOP command to opt-out"
+                }
+            )
+        
+        # User is subscribed - proceed with sending
         metadata = {
             "priority": request.priority,
             "requested_at": int(time.time()),
@@ -242,17 +266,29 @@ async def send_template_message_api(request: TemplateMessageRequest):
         )
         
         if message_id:
+            logger.info(f"✅ Template message queued: {message_id} to {request.phone_number}")
+            
+            await send_analytics_event("template_message_queued", {
+                "phone_number": request.phone_number,
+                "template_name": request.template_name,
+                "priority": request.priority,
+                "queue_message_id": message_id
+            })
+            
             return {
                 "status": "queued",
                 "message_id": message_id,
                 "phone_number": request.phone_number,
                 "message_type": "template",
                 "template_name": request.template_name,
+                "subscription_status": "subscribed",
                 "estimated_processing_time": "1-5 minutes"
             }
         else:
-            raise HTTPException(status_code=503, detail="Message queuing service unavailable")
+            raise HTTPException(status_code=500, detail="Failed to queue template message")
             
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Error sending template message: {e}")
         raise HTTPException(status_code=500, detail=str(e))

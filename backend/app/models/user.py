@@ -29,6 +29,7 @@ class UserProfile(BaseModel):
     tags: List[str] = Field(default=[], description="Customer tags")
     notes: Optional[str] = Field(None, description="Customer notes")
     is_active: bool = Field(True, description="Is user active")
+    subscription: str = Field("subscribed", description="Subscription status for template messages")
 
 class UserCreate(BaseModel):
     """User creation model"""
@@ -49,6 +50,7 @@ class UserUpdate(BaseModel):
     tags: Optional[List[str]] = None
     notes: Optional[str] = None
     is_active: Optional[bool] = None
+    subscription: Optional[str] = Field(None, description="Update subscription status")
 
 class UserResponse(BaseModel):
     """User response model"""
@@ -62,6 +64,8 @@ class UserResponse(BaseModel):
     total_messages: int
     last_interaction: Optional[datetime]
     is_active: bool
+    subscription: str
+    subscription_updated_at: Optional[datetime]
     created_at: datetime
 
 # SQLAlchemy Database Model
@@ -85,6 +89,10 @@ class UserProfileDB(Base):
     last_interaction = Column(DateTime, default=datetime.utcnow)
     total_messages = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
+    
+    # Message subscription (for templates only, does NOT affect automated replies)
+    subscription = Column(String(20), default="subscribed")  # 'subscribed' or 'unsubscribed'
+    subscription_updated_at = Column(DateTime, default=datetime.utcnow)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
