@@ -251,23 +251,20 @@ class MessageProcessor:
             message_id: WhatsApp message ID
             status: New status ('processed', 'failed')
         """
-        db = SessionLocal()
         try:
-            message_repo = MessageRepository(db)
-            message = message_repo.get_by_message_id(message_id)
-            
-            if message:
-                message.status = status
-                db.commit()
-                db.refresh(message)
-                logger.debug(f"✅ RDS status updated: {message_id} -> {status}")
-            else:
-                logger.warning(f"⚠️ Message not found in RDS for status update: {message_id}")
+            with get_db_session() as db:
+                message_repo = MessageRepository(db)
+                message = message_repo.get_by_message_id(message_id)
+                
+                if message:
+                    message.status = status
+                    db.commit()
+                    logger.debug(f"✅ RDS status updated: {message_id} -> {status}")
+                else:
+                    logger.warning(f"⚠️ Message not found in RDS for status update: {message_id}")
         except Exception as e:
             logger.error(f"❌ Failed to update RDS status for {message_id}: {e}")
             raise
-        finally:
-            db.close()
     
     async def handle_whatsapp_message(
         self, 
