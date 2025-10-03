@@ -506,7 +506,6 @@ class WhatsAppService:
                 "message_type": msg_data.get("type", "text"),
                 "content": msg_data.get("text", {}).get("body") if msg_data.get("type") == "text" else None,
                 "timestamp": datetime.utcnow(),
-                "webhook_raw_data": webhook_data,
                 "status": "received"
             }
         except (IndexError, KeyError):

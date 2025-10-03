@@ -63,10 +63,6 @@ class WhatsAppMessage(Base):
     status = Column(String(20), default="received")  # received, delivered, read, failed
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     
-    # Context and metadata
-    context_message_id = Column(String(100))  # For replies
-    webhook_raw_data = Column(JSON)  # Store original webhook payload
-    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

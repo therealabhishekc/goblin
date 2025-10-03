@@ -46,7 +46,6 @@ class WhatsAppMessage(BaseModel):
     media_size: Optional[int] = Field(None, description="Media file size in bytes")
     status: MessageStatus = Field(MessageStatus.RECEIVED, description="Message status")
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    context_message_id: Optional[str] = Field(None, description="ID of message being replied to")
 
 class WhatsAppWebhookPayload(BaseModel):
     """WhatsApp webhook payload structure"""
@@ -109,8 +108,6 @@ class WhatsAppMessageDB(Base):
     status = Column(String(20), default="received")
     direction = Column(String(20), default="incoming", index=True)  # 'incoming' or 'outgoing'
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    context_message_id = Column(String(100))
-    webhook_raw_data = Column(JSON)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
