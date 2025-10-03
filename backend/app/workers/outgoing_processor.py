@@ -20,6 +20,8 @@ from app.services.sqs_service import sqs_service, QueueType, SQSMessage
 from app.whatsapp_api import send_whatsapp_message
 from app.core.logging import logger
 from app.config import get_settings
+from app.repositories.message_repository import MessageRepository
+from app.core.database import SessionLocal
 
 settings = get_settings()
 
@@ -130,6 +132,34 @@ class OutgoingMessageProcessor:
                 
                 # Extract message ID from WhatsApp response
                 wa_message_id = result.get('messages', [{}])[0].get('id', 'unknown')
+                
+                # Store sent message in database
+                try:
+                    db = SessionLocal()
+                    message_repo = MessageRepository(db)
+                    
+                    message_data = {
+                        "message_id": wa_message_id,
+                        "from_phone": metadata.get("business_phone", "business"),
+                        "to_phone": phone_number,
+                        "message_type": whatsapp_message_data.get("type", "text"),
+                        "content": whatsapp_message_data.get("content", ""),
+                        "media_url": whatsapp_message_data.get("media_url"),
+                        "timestamp": datetime.utcnow(),
+                        "status": "sent",
+                        "direction": "outgoing"
+                    }
+                    
+                    stored_message = message_repo.create_from_dict(message_data)
+                    db.commit()
+                    db.close()
+                    
+                    logger.info(f"📝 Outgoing message stored in database: {wa_message_id}")
+                    
+                except Exception as db_error:
+                    logger.error(f"❌ Failed to store outgoing message in database: {db_error}")
+                    # Don't fail the send operation if storage fails
+                    # The message was successfully sent to WhatsApp
                 
                 # Delete from SQS after successful send
                 await sqs_service.delete_message(QueueType.OUTGOING, sqs_message.receipt_handle)

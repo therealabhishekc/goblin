@@ -107,6 +107,7 @@ class WhatsAppMessageDB(Base):
     
     # Message status and context
     status = Column(String(20), default="received")
+    direction = Column(String(20), default="incoming", index=True)  # 'incoming' or 'outgoing'
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     context_message_id = Column(String(100))
     webhook_raw_data = Column(JSON)

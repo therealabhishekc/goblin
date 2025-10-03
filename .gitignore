@@ -22,3 +22,5 @@ __pycache__/
 
 # AWS
 *.pem
+*.pyc
+__pycache__/
