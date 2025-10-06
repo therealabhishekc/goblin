@@ -26,6 +26,10 @@ try:
     from app.api import admin
 except ImportError:
     admin = None
+try:
+    from app.api import marketing
+except ImportError:
+    marketing = None
 from app.api_endpoints import router as legacy_api_router
 
 # SQS Workers
@@ -164,6 +168,14 @@ if admin:
         logger.info("✅ Admin API endpoints loaded")
     except Exception as e:
         logger.warning(f"⚠️  Admin API endpoints failed to load: {e}")
+
+# Include marketing router if available
+if marketing:
+    try:
+        app.include_router(marketing.router)
+        logger.info("✅ Marketing API endpoints loaded")
+    except Exception as e:
+        logger.warning(f"⚠️  Marketing API endpoints failed to load: {e}")
 
 # Legacy endpoints (for backward compatibility)
 try:
