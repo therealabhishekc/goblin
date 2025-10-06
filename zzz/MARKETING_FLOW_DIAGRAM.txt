@@ -1,0 +1,330 @@
+═══════════════════════════════════════════════════════════════════════════════
+                    MARKETING CAMPAIGN SYSTEM - FLOW DIAGRAM
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 1: CREATE CAMPAIGN (One-Time Setup)                                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Admin Creates Campaign
+           ↓
+    POST /api/campaigns
+    {
+      name: "Summer Sale",
+      template: "discount_20",
+      target: {tier: "premium"},
+      start_date: "2025-06-01",
+      daily_limit: 250
+    }
+           ↓
+    ┌───────────────────────────┐
+    │ MarketingService          │
+    │ .create_campaign()        │
+    └───────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 1. Create campaign record in marketing_campaigns              │
+    │    - id: campaign-abc-123                                     │
+    │    - status: "draft"                                          │
+    │    - total_target_count: 0                                    │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 2. Query target audience from user_profiles                   │
+    │    - WHERE subscription = "subscribed"                        │
+    │    - AND customer_tier = "premium"                            │
+    │    - Result: 10,000 users found                               │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 3. Schedule recipients across 40 days (10,000 ÷ 250)         │
+    │                                                               │
+    │    Recipients 1-250:    scheduled_date = 2025-06-01          │
+    │    Recipients 251-500:  scheduled_date = 2025-06-02          │
+    │    Recipients 501-750:  scheduled_date = 2025-06-03          │
+    │    ...                                                        │
+    │    Recipients 9751-10000: scheduled_date = 2025-07-10        │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 4. Bulk insert into marketing_campaign_recipients             │
+    │                                                               │
+    │    INSERT 10,000 records:                                     │
+    │    {                                                          │
+    │      campaign_id: campaign-abc-123,                           │
+    │      user_phone: "+1234567890",                               │
+    │      status: "pending",                                       │
+    │      scheduled_date: "2025-06-01"                             │
+    │    }                                                          │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ✅ Campaign created! 10,000 recipients scheduled over 40 days
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 2: DAILY SENDING (Automated - Runs Every Day at 9 AM)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    Cron Job Triggers
+    (Every day at 9:00 AM)
+           ↓
+    ┌───────────────────────────┐
+    │ send_daily_marketing_     │
+    │ messages()                │
+    └───────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 1. Check today's quota                                        │
+    │    SELECT * FROM marketing_daily_quotas                       │
+    │    WHERE date = CURRENT_DATE                                  │
+    │                                                               │
+    │    Result: messages_sent = 0, daily_limit = 250              │
+    │    Remaining: 250                                             │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 2. Get today's pending recipients                             │
+    │    SELECT * FROM marketing_campaign_recipients                │
+    │    WHERE scheduled_date = '2025-06-01'                        │
+    │      AND status = 'pending'                                   │
+    │    LIMIT 250                                                  │
+    │                                                               │
+    │    Result: 250 recipients ready to send                       │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║  FOR EACH RECIPIENT (Loop 250 times)                          ║
+    ╚═══════════════════════════════════════════════════════════════╝
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 3a. Send WhatsApp template message                            │
+    │     whatsapp_service.send_template_message(                   │
+    │       to_phone = "+1234567890",                               │
+    │       template_name = "discount_20",                          │
+    │       language = "en_US"                                      │
+    │     )                                                         │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 3b. WhatsApp API Response                                     │
+    │     {                                                         │
+    │       "messages": [{                                          │
+    │         "id": "wamid.ABC123XYZ"                               │
+    │       }]                                                      │
+    │     }                                                         │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 3c. Update recipient record                                   │
+    │     UPDATE marketing_campaign_recipients                      │
+    │     SET status = 'sent',                                      │
+    │         message_id = 'wamid.ABC123XYZ',                       │
+    │         sent_at = NOW()                                       │
+    │     WHERE id = recipient_id                                   │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 3d. Update campaign progress                                  │
+    │     UPDATE marketing_campaigns                                │
+    │     SET messages_sent = messages_sent + 1                     │
+    │     WHERE id = campaign_id                                    │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ 3e. Update daily quota                                        │
+    │     UPDATE marketing_daily_quotas                             │
+    │     SET messages_sent = messages_sent + 1                     │
+    │     WHERE date = CURRENT_DATE                                 │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ╔═══════════════════════════════════════════════════════════════╗
+    ║  REPEAT FOR ALL 250 RECIPIENTS                                ║
+    ╚═══════════════════════════════════════════════════════════════╝
+           ↓
+    ✅ Day 1 complete: 250 messages sent
+       Campaign progress: 250/10,000 (2.5%)
+       Remaining: 9,750 customers over 39 days
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 3: DELIVERY TRACKING (Real-Time Webhooks from WhatsApp)              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    WhatsApp sends webhook
+           ↓
+    POST /webhook
+    {
+      "entry": [{
+        "changes": [{
+          "value": {
+            "statuses": [{
+              "id": "wamid.ABC123XYZ",
+              "status": "delivered"
+            }]
+          }
+        }]
+      }]
+    }
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ Update recipient delivery status                              │
+    │                                                               │
+    │ UPDATE marketing_campaign_recipients                          │
+    │ SET status = 'delivered',                                     │
+    │     delivered_at = NOW()                                      │
+    │ WHERE message_id = 'wamid.ABC123XYZ'                          │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ Update campaign statistics                                    │
+    │                                                               │
+    │ UPDATE marketing_campaigns                                    │
+    │ SET messages_delivered = messages_delivered + 1               │
+    │ WHERE id = campaign_id                                        │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    ✅ Delivery confirmed and tracked
+
+    ┌────────────────────────────────────────────────────────────┐
+    │ Possible Status Updates:                                   │
+    │                                                            │
+    │  "sent"      → Message left your server                    │
+    │  "delivered" → Message reached customer's phone            │
+    │  "read"      → Customer opened the message                 │
+    │  "failed"    → Delivery failed, will retry                 │
+    └────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  STEP 4: MONITORING & ANALYTICS                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    GET /api/campaigns/{campaign_id}/stats
+           ↓
+    ┌───────────────────────────────────────────────────────────────┐
+    │ Query campaign progress                                       │
+    │                                                               │
+    │ SELECT                                                        │
+    │   c.messages_sent,                                            │
+    │   c.messages_delivered,                                       │
+    │   c.messages_read,                                            │
+    │   c.messages_failed,                                          │
+    │   COUNT(*) FILTER (WHERE status='pending') as pending         │
+    │ FROM marketing_campaigns c                                    │
+    │ JOIN marketing_campaign_recipients r ON r.campaign_id = c.id  │
+    │ WHERE c.id = campaign_id                                      │
+    └───────────────────────────────────────────────────────────────┘
+           ↓
+    Response:
+    {
+      "total_recipients": 10000,
+      "messages_sent": 2500,          ← Day 10
+      "messages_delivered": 2450,     ← 98% delivery rate
+      "messages_read": 1200,          ← 48% open rate
+      "messages_failed": 50,          ← 2% failure rate
+      "pending": 7500,                ← Still to send
+      "delivery_rate": 98.0,
+      "read_rate": 48.9,
+      "estimated_completion": "2025-07-10"
+    }
+
+
+═══════════════════════════════════════════════════════════════════════════════
+                         DATABASE STATE OVER TIME
+═══════════════════════════════════════════════════════════════════════════════
+
+DAY 1 (2025-06-01):
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ marketing_campaign_recipients                                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ user_phone    | scheduled_date | status    | sent_at             | msg_id  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ +1234567890   | 2025-06-01     | sent      | 2025-06-01 09:00:05 | wam.001 │
+│ +1234567891   | 2025-06-01     | sent      | 2025-06-01 09:00:06 | wam.002 │
+│ ...           | ...            | ...       | ...                 | ...     │
+│ +1234568139   | 2025-06-01     | sent      | 2025-06-01 09:05:00 | wam.250 │
+│ +1234568140   | 2025-06-02     | pending   | NULL                | NULL    │ ← Tomorrow
+│ ...           | ...            | pending   | NULL                | NULL    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ marketing_daily_quotas                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ date         | messages_sent | daily_limit | remaining                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 2025-06-01   | 250           | 250         | 0         ← Quota exhausted    │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+DAY 2 (2025-06-02):
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ marketing_campaign_recipients                                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ user_phone    | scheduled_date | status    | sent_at             | msg_id  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ +1234567890   | 2025-06-01     | delivered | 2025-06-01 09:00:05 | wam.001 │
+│ +1234567891   | 2025-06-01     | read      | 2025-06-01 09:00:06 | wam.002 │
+│ ...           | ...            | ...       | ...                 | ...     │
+│ +1234568140   | 2025-06-02     | sent      | 2025-06-02 09:00:05 | wam.251 │
+│ +1234568141   | 2025-06-02     | sent      | 2025-06-02 09:00:06 | wam.252 │
+│ ...           | ...            | sent      | ...                 | ...     │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                      DUPLICATE PREVENTION MECHANISM
+═══════════════════════════════════════════════════════════════════════════════
+
+Database Constraint:
+┌───────────────────────────────────────────────────────────────────┐
+│ UNIQUE(campaign_id, user_phone)                                   │
+└───────────────────────────────────────────────────────────────────┘
+
+Scenario 1: Try to add same customer twice to same campaign
+┌───────────────────────────────────────────────────────────────────┐
+│ INSERT INTO marketing_campaign_recipients                         │
+│   (campaign_id, user_phone)                                       │
+│ VALUES                                                            │
+│   ('campaign-A', '+1234567890'),  ← First insert  ✅ SUCCESS      │
+│   ('campaign-A', '+1234567890');  ← Second insert ❌ REJECTED     │
+│                                                                   │
+│ ERROR: duplicate key value violates unique constraint            │
+└───────────────────────────────────────────────────────────────────┘
+
+Scenario 2: Same customer in different campaigns (ALLOWED)
+┌───────────────────────────────────────────────────────────────────┐
+│ INSERT INTO marketing_campaign_recipients                         │
+│   (campaign_id, user_phone)                                       │
+│ VALUES                                                            │
+│   ('campaign-A', '+1234567890'),  ← Summer Sale    ✅ SUCCESS     │
+│   ('campaign-B', '+1234567890');  ← Holiday Sale   ✅ SUCCESS     │
+└───────────────────────────────────────────────────────────────────┘
+
+═══════════════════════════════════════════════════════════════════════════════
+                            SYSTEM GUARANTEES
+═══════════════════════════════════════════════════════════════════════════════
+
+✅ GUARANTEE 1: No Duplicates
+   - Database UNIQUE constraint prevents same user getting same campaign twice
+   - Enforced at database level, not application logic
+   - Cannot be bypassed
+
+✅ GUARANTEE 2: Daily Limit Respected
+   - Every send increments daily quota counter
+   - Worker checks remaining quota before sending next batch
+   - Never exceeds 250/day
+
+✅ GUARANTEE 3: Delivery Tracking
+   - Every message has unique message_id from WhatsApp
+   - Webhooks update status in real-time
+   - Full audit trail: who, when, delivered, read
+
+✅ GUARANTEE 4: Subscription Respect
+   - Only queries users WHERE subscription = 'subscribed'
+   - Unsubscribed users automatically excluded
+   - GDPR/compliance friendly
+
+✅ GUARANTEE 5: Automatic Retry
+   - Failed messages have retry_count
+   - Can be rescheduled for next day
+   - Max retries configurable (default: 3)
+
+═══════════════════════════════════════════════════════════════════════════════

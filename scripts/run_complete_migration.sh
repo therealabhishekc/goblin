@@ -103,7 +103,8 @@ echo ""
 # =============================================================================
 
 print_warning "This will execute the complete schema migration on the database."
-print_warning "This includes creating/updating all tables, columns, indexes, and constraints."
+print_warning "This includes creating/updating all 9 tables, columns, indexes, and constraints."
+print_warning "Core tables (5) + Marketing campaign tables (4)"
 echo ""
 read -p "Do you want to proceed? (yes/no): " confirm
 
@@ -212,8 +213,18 @@ TABLE_COUNT=$(PGPASSWORD="$DB_MASTER_PASSWORD" psql \
 
 print_success "Tables created: $TABLE_COUNT"
 
-# Check specific tables
-EXPECTED_TABLES=("user_profiles" "whatsapp_messages" "message_queue" "business_metrics" "message_templates")
+# Check specific tables (including marketing campaign tables)
+EXPECTED_TABLES=(
+    "user_profiles" 
+    "whatsapp_messages" 
+    "message_queue" 
+    "business_metrics" 
+    "message_templates"
+    "marketing_campaigns"
+    "campaign_recipients"
+    "campaign_send_schedule"
+    "campaign_analytics"
+)
 
 for table in "${EXPECTED_TABLES[@]}"; do
     EXISTS=$(PGPASSWORD="$DB_MASTER_PASSWORD" psql \
@@ -247,11 +258,18 @@ echo "✅ Migration executed: complete_schema.sql"
 echo "✅ Tables created: $TABLE_COUNT"
 echo ""
 echo "Expected tables:"
-echo "  • user_profiles (customer profiles)"
-echo "  • whatsapp_messages (message history)"
-echo "  • message_queue (SQS tracking)"
-echo "  • business_metrics (daily analytics)"
-echo "  • message_templates (reusable templates)"
+echo "  Core Tables (5):"
+echo "    • user_profiles (customer profiles)"
+echo "    • whatsapp_messages (message history)"
+echo "    • message_queue (SQS tracking)"
+echo "    • business_metrics (daily analytics)"
+echo "    • message_templates (reusable templates)"
+echo ""
+echo "  Marketing Campaign Tables (4):"
+echo "    • marketing_campaigns (campaign management)"
+echo "    • campaign_recipients (recipient tracking)"
+echo "    • campaign_send_schedule (daily scheduling)"
+echo "    • campaign_analytics (campaign analytics)"
 echo ""
 echo "Next steps:"
 echo "  1. Verify your application can connect to the database"

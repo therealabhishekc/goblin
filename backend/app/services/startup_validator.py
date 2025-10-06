@@ -81,27 +81,51 @@ class StartupValidator:
                 # Test basic connectivity
                 db.execute(text("SELECT 1"))
                 
-                # Test table exists (basic schema check)
+                # Test tables exist (basic schema check)
+                core_tables = ['user_profiles', 'whatsapp_messages', 'business_metrics', 'message_templates']
+                marketing_tables = ['marketing_campaigns', 'campaign_recipients', 'campaign_send_schedule', 'campaign_analytics']
+                
                 try:
-                    db.execute(text("SELECT COUNT(*) FROM user_profiles LIMIT 1"))
-                    schema_check = True
+                    # Check core tables
+                    for table in core_tables:
+                        db.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))
+                    core_schema_check = True
                 except Exception:
-                    schema_check = False
+                    core_schema_check = False
+                
+                try:
+                    # Check marketing tables
+                    for table in marketing_tables:
+                        db.execute(text(f"SELECT 1 FROM {table} LIMIT 1"))
+                    marketing_schema_check = True
+                except Exception:
+                    marketing_schema_check = False
                 
                 self.validation_results.append(ValidationResult(
                     name="Database Connectivity",
                     passed=True,
                     critical=True,
                     message="Database connection successful",
-                    details={"schema_validated": schema_check}
+                    details={
+                        "core_tables_validated": core_schema_check,
+                        "marketing_tables_validated": marketing_schema_check
+                    }
                 ))
                 
-                if not schema_check:
+                if not core_schema_check:
                     self.validation_results.append(ValidationResult(
-                        name="Database Schema",
+                        name="Core Database Schema",
                         passed=False,
                         critical=False,
-                        message="Database tables may not be initialized - run migrations"
+                        message="Core database tables may not be initialized - run migrations"
+                    ))
+                
+                if not marketing_schema_check:
+                    self.validation_results.append(ValidationResult(
+                        name="Marketing Database Schema",
+                        passed=False,
+                        critical=False,
+                        message="Marketing campaign tables may not be initialized - run migrations"
                     ))
                     
         except Exception as e:

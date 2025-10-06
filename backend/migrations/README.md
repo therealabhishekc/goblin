@@ -6,7 +6,8 @@ This directory contains SQL migration files for the WhatsApp Business API databa
 
 ### Combined Migration (USE THIS)
 - **`complete_schema.sql`** - Complete database schema with all migrations combined
-  - Creates all tables, columns, indexes, and constraints
+  - Creates all 9 tables, columns, indexes, and constraints
+  - Includes 5 core tables + 4 marketing campaign tables
   - Safe to run multiple times (uses IF NOT EXISTS)
   - Includes all historical migrations
 
@@ -17,6 +18,7 @@ These files have been combined into `complete_schema.sql`:
 3. `add_subscription_column.sql` - Adds subscription column to user_profiles
 4. `add_business_metrics_table.sql` - Adds business_metrics and message_templates tables
 5. `update_status_values.sql` - Updates status constraints
+6. `add_marketing_campaigns.sql` - Adds marketing campaign tables (NOW INCLUDED IN complete_schema.sql)
 
 ## 🚀 How to Run Migrations
 
@@ -59,8 +61,9 @@ PGPASSWORD="$DB_MASTER_PASSWORD" psql \
 
 ## 📊 Database Schema
 
-### Tables Created
+### Tables Created (9 Total)
 
+#### Core Tables (5)
 1. **`user_profiles`** - Customer information
    - Stores WhatsApp customer data
    - Subscription status for template messages
@@ -86,6 +89,29 @@ PGPASSWORD="$DB_MASTER_PASSWORD" psql \
    - Usage tracking
    - Category organization
 
+#### Marketing Campaign Tables (4)
+6. **`marketing_campaigns`** - Campaign management
+   - Campaign details, status, scheduling
+   - Daily send limits (WhatsApp rate limiting)
+   - Target audience filters
+   - Statistics tracking
+
+7. **`campaign_recipients`** - Recipient tracking
+   - Individual recipient records per campaign
+   - Status per recipient (pending, sent, delivered, read, failed)
+   - Scheduled send dates
+   - Retry logic and failure reasons
+
+8. **`campaign_send_schedule`** - Daily batch scheduling
+   - Daily send batches to respect rate limits
+   - Batch size tracking (default 250/day)
+   - Progress monitoring per batch
+
+9. **`campaign_analytics`** - Campaign performance
+   - Daily analytics per campaign
+   - Delivery rates, read rates, response rates
+   - Engagement metrics
+
 ## 🔍 Verification
 
 After running migrations, verify with:
@@ -106,7 +132,15 @@ SELECT 'message_queue', COUNT(*) FROM message_queue
 UNION ALL
 SELECT 'business_metrics', COUNT(*) FROM business_metrics
 UNION ALL
-SELECT 'message_templates', COUNT(*) FROM message_templates;
+SELECT 'message_templates', COUNT(*) FROM message_templates
+UNION ALL
+SELECT 'marketing_campaigns', COUNT(*) FROM marketing_campaigns
+UNION ALL
+SELECT 'campaign_recipients', COUNT(*) FROM campaign_recipients
+UNION ALL
+SELECT 'campaign_send_schedule', COUNT(*) FROM campaign_send_schedule
+UNION ALL
+SELECT 'campaign_analytics', COUNT(*) FROM campaign_analytics;
 ```
 
 ## ⚠️ Important Notes
