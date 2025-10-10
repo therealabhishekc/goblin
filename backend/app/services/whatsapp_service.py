@@ -545,7 +545,10 @@ class WhatsAppService:
             "tags": user.tags,
             "total_messages": user.total_messages,
             "last_interaction": user.last_interaction.isoformat() if user.last_interaction else None,
-            "is_active": user.is_active
+            "is_active": user.is_active,
+            "subscription": user.subscription,
+            "subscription_updated_at": user.subscription_updated_at.isoformat() if user.subscription_updated_at else None,
+            "created_at": user.created_at.isoformat() if user.created_at else None
         }
     
     def _metrics_to_dict(self, metrics) -> dict:

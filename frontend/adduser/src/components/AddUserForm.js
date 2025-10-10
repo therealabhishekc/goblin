@@ -69,7 +69,7 @@ function AddUserForm() {
     };
     
     try {
-      const response = await fetch('http://localhost:8000/api/users', {
+      const response = await fetch('https://hwwsxxpemc.us-east-1.awsapprunner.com/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -97,7 +97,7 @@ function AddUserForm() {
     } catch (error) {
       setAlert({ 
         type: 'error', 
-        message: `❌ Network Error: ${error.message}. Make sure the backend is running on http://localhost:8000` 
+        message: `❌ Network Error: ${error.message}. Make sure the backend is running` 
       });
     } finally {
       setLoading(false);
