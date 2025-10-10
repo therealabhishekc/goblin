@@ -31,6 +31,10 @@ try:
     from app.api import marketing
 except ImportError:
     marketing = None
+try:
+    from app.api import users
+except ImportError:
+    users = None
 from app.api_endpoints import router as legacy_api_router
 
 # SQS Workers
@@ -168,6 +172,14 @@ app.include_router(health.router)
 app.include_router(webhook.router)
 app.include_router(messaging.router)
 app.include_router(monitoring.router)
+
+# Include users router (User Management)
+if users:
+    try:
+        app.include_router(users.router)
+        logger.info("✅ User Management API endpoints loaded")
+    except Exception as e:
+        logger.warning(f"⚠️  User Management API endpoints failed to load: {e}")
 
 # Include archive router if available
 if archive:
