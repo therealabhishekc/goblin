@@ -10,8 +10,63 @@ from datetime import datetime, timedelta
 
 from app.core.database import get_database_session
 from app.services.whatsapp_service import WhatsAppService
+from app.models.user import UserCreate, UserResponse
+from app.repositories.user_repository import UserRepository
 
 router = APIRouter(prefix="/api", tags=["WhatsApp Business API"])
+
+@router.post("/users", response_model=UserResponse)
+async def create_user(
+    user_data: UserCreate,
+    db: Session = Depends(get_database_session)
+):
+    """Create a new user manually"""
+    from app.models.user import UserProfile
+    from datetime import datetime
+    
+    user_repo = UserRepository(db)
+    
+    # Check if user already exists
+    existing_user = user_repo.get_by_phone_number(user_data.whatsapp_phone)
+    if existing_user:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"User with phone number {user_data.whatsapp_phone} already exists"
+        )
+    
+    # Create user profile
+    user_profile = UserProfile(
+        whatsapp_phone=user_data.whatsapp_phone,
+        display_name=user_data.display_name,
+        business_name=user_data.business_name,
+        email=user_data.email,
+        customer_tier=user_data.customer_tier,
+        tags=user_data.tags,
+        notes=user_data.notes,
+        first_contact=datetime.utcnow(),
+        last_interaction=datetime.utcnow(),
+        total_messages=0
+    )
+    
+    # Create user in database
+    created_user = user_repo.create(user_profile)
+    
+    # Return user response
+    return UserResponse(
+        id=str(created_user.id),
+        whatsapp_phone=created_user.whatsapp_phone,
+        display_name=created_user.display_name,
+        business_name=created_user.business_name,
+        email=created_user.email,
+        customer_tier=created_user.customer_tier,
+        tags=created_user.tags or [],
+        total_messages=created_user.total_messages,
+        last_interaction=created_user.last_interaction,
+        is_active=created_user.is_active,
+        subscription=created_user.subscription,
+        subscription_updated_at=created_user.subscription_updated_at,
+        created_at=created_user.created_at
+    )
 
 @router.get("/users/{phone_number}")
 async def get_user_profile(
