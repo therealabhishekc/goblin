@@ -23,7 +23,11 @@ class UserProfile(BaseModel):
     """User profile data model"""
     whatsapp_phone: str = Field(..., description="WhatsApp phone number")
     display_name: Optional[str] = Field(None, description="Display name")
-    business_name: Optional[str] = Field(None, description="Business name")
+    address_line1: Optional[str] = Field(None, description="Street address")
+    address_line2: Optional[str] = Field(None, description="Apartment, suite, etc.")
+    city: Optional[str] = Field(None, description="City")
+    state: Optional[str] = Field(None, description="State")
+    zipcode: Optional[str] = Field(None, description="ZIP/Postal code")
     email: Optional[EmailStr] = Field(None, description="Email address")
     customer_tier: CustomerTier = Field(CustomerTier.REGULAR, description="Customer tier")
     tags: List[str] = Field(default=[], description="Customer tags")
@@ -35,7 +39,11 @@ class UserCreate(BaseModel):
     """User creation model"""
     whatsapp_phone: str
     display_name: Optional[str] = None
-    business_name: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zipcode: Optional[str] = None
     email: Optional[EmailStr] = None
     customer_tier: CustomerTier = CustomerTier.REGULAR
     tags: List[str] = []
@@ -44,7 +52,11 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     """User update model"""
     display_name: Optional[str] = None
-    business_name: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zipcode: Optional[str] = None
     email: Optional[EmailStr] = None
     customer_tier: Optional[CustomerTier] = None
     tags: Optional[List[str]] = None
@@ -57,7 +69,11 @@ class UserResponse(BaseModel):
     id: str
     whatsapp_phone: str
     display_name: Optional[str]
-    business_name: Optional[str]
+    address_line1: Optional[str]
+    address_line2: Optional[str]
+    city: Optional[str]
+    state: Optional[str]
+    zipcode: Optional[str]
     email: Optional[str]
     customer_tier: str
     tags: List[str]
@@ -76,7 +92,11 @@ class UserProfileDB(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     whatsapp_phone = Column(String(20), unique=True, nullable=False, index=True)
     display_name = Column(String(100))
-    business_name = Column(String(200))
+    address_line1 = Column(String(200))
+    address_line2 = Column(String(200))
+    city = Column(String(100))
+    state = Column(String(50))
+    zipcode = Column(String(20))
     email = Column(String(255))
     
     # Customer management
@@ -90,7 +110,7 @@ class UserProfileDB(Base):
     total_messages = Column(Integer, default=0)
     is_active = Column(Boolean, default=True)
     
-    # Message subscription (for templates only, does NOT affect automated replies)
+    # Message subscription 
     subscription = Column(String(20), default="subscribed")  # 'subscribed' or 'unsubscribed'
     subscription_updated_at = Column(DateTime, default=datetime.utcnow)
     

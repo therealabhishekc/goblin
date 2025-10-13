@@ -19,10 +19,12 @@ class UserRepository(BaseRepository[UserProfile]):
             self.model_class.whatsapp_phone == phone_number
         ).first()
     
-    def get_by_business_name(self, business_name: str) -> List[UserProfileDB]:
-        """Search users by business name"""
+    def search_by_name_or_city(self, query: str) -> List[UserProfileDB]:
+        """Search users by display name or city"""
+        search_pattern = f"%{query}%"
         return self.db.query(self.model_class).filter(
-            self.model_class.business_name.ilike(f"%{business_name}%")
+            (self.model_class.display_name.ilike(search_pattern)) |
+            (self.model_class.city.ilike(search_pattern))
         ).all()
     
     def get_active_users(self) -> List[UserProfileDB]:

@@ -25,6 +25,20 @@ def validate_email(email: str) -> bool:
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
 
-def validate_business_name(name: str) -> bool:
-    """Validate business name"""
-    return bool(name and len(name.strip()) >= 2 and len(name.strip()) <= 200)
+def validate_address_line(address: str) -> bool:
+    """Validate address line"""
+    return bool(address and len(address.strip()) >= 2 and len(address.strip()) <= 200)
+
+def validate_city(city: str) -> bool:
+    """Validate city name"""
+    return bool(city and len(city.strip()) >= 2 and len(city.strip()) <= 100)
+
+def validate_state(state: str) -> bool:
+    """Validate state (2 letter code or full name)"""
+    return bool(state and len(state.strip()) >= 2 and len(state.strip()) <= 50)
+
+def validate_zipcode(zipcode: str) -> bool:
+    """Validate ZIP/postal code (flexible format)"""
+    # Supports US ZIP (5 or 9 digits), Canadian postal code, and other formats
+    pattern = r'^[A-Za-z0-9][A-Za-z0-9\s\-]{2,12}[A-Za-z0-9]$'
+    return bool(zipcode and re.match(pattern, zipcode.strip()))

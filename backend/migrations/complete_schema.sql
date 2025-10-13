@@ -1,6 +1,68 @@
 -- =============================================================================
 -- COMPLETE DATABASE SCHEMA MIGRATION
+-- ==========================CREATE INDEX IF NOT EALTER COLUMN status SET D'Message status: prEND $$'Message status: END $$;
+
 -- =============================================================================
+-- SECTION 5: VERIFICATION QUERIES
+-- =============================================================================ssing (being processed), processed (completed successfully), failed (processing failed),     FOR EACH ROW EEND $$;
+
+-- =============================================================================
+-- SECTION 8: HELPFUL VIEWS FOR MARKETING CAMPAIGNS
+-- =============================================================================E FUNCTION update_updated_at_column();
+
+-- =============================================================================
+-- SECTION 7: GRANT PERMISSIONS FOR MARKETING TABLES
+-- =============================================================================(outgoing message sent), delivered (message delivered to customer), read (message read by recipient)';
+
+-- =============================================================================
+-- SECTION 4: GRANT PERMISSIONS TO APP USER
+-- ============================================================================= =============================================================================
+-- SECTION 6: VERIFICATION QUERIES
+-- =============================================================================ing (being processed), processed (completed successfully), failed (processing failed), se    FOR EACH ROW EEND $$;
+
+-- =======================================================END $$;
+
+-- =============================================================================
+-- SECTION 9: FINAL VERIFICATION QUERIES
+-- ==============================================================================================
+-- SECTION 9: HELPFUL VIEWS FOR MARKETING CAMPAIGNS
+-- =============================================================================E FUNCTION update_updated_at_column();
+
+-- =============================================================================
+-- SECTION 8: GRANT PERMISSIONS FOR MARKETING TABLES
+-- =============================================================================utgoing message sent), delivered (message delivered to customer), read (message read by recipient)';
+
+-- =============================================================================
+-- SECTION 5: GRANT PERMISSIONS TO APP USER
+-- =============================================================================T 'processing';
+
+-- =============================================================================
+-- SECTION 4: ADD COMMENTS AND DOCUMENTATION
+-- ============================================================================= idx_message_templates_active ON message_templates(is_active);
+
+-- =============================================================================
+-- SECTION 3: UPDATE STATUS VALUES (update_status_values.sql)
+-- =============================================================================================CREATE INDEX IF NOT EALTER COLUMN status SET D'Message status: prEND $$;
+
+-- ================================GROUP BY direction;
+
+-- =============================================================================
+-- SECTION 6: MARKETING CAMPAIGNS TABLES
+-- =====================================================================================================================
+-- SECTION 7: VERIFICATION QUERIES
+-- =============================================================================ing (being processed), processed (completed successfully), failed (processing failed), sent (outgoing message sent), delivered (message delivered to customer), read (message read by recipient)';
+
+-- =============================================================================
+-- SECTION 6: GRANT PERMISSIONS TO APP USER
+-- =============================================================================T 'processing';
+
+-- =============================================================================
+-- SECTION 5: ADD COMMENTS AND DOCUMENTATION
+-- ============================================================================= idx_message_templates_active ON message_templates(is_active);
+
+-- =============================================================================
+-- SECTION 4: UPDATE STATUS VALUES (update_status_values.sql)
+-- ======================================================================================================
 -- This file combines all migrations into one comprehensive schema setup
 -- Run this to create/update all tables and columns from scratch
 -- Date: 2025-10-03
@@ -15,9 +77,15 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     whatsapp_phone VARCHAR(20) UNIQUE NOT NULL,
     display_name VARCHAR(100),
-    business_name VARCHAR(200),
+    address_line1 VARCHAR(200),
+    address_line2 VARCHAR(200),
+    city VARCHAR(100),
+    state VARCHAR(50),
+    zipcode VARCHAR(20),
     email VARCHAR(100),
     customer_tier VARCHAR(20) DEFAULT 'regular',
+    subscription VARCHAR(20) DEFAULT 'subscribed',
+    subscription_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     tags TEXT[] DEFAULT '{}',
     notes TEXT,
     first_contact TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -25,12 +93,17 @@ CREATE TABLE IF NOT EXISTS user_profiles (
     total_messages INTEGER DEFAULT 0,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT user_profiles_subscription_check CHECK (subscription IN ('subscribed', 'unsubscribed'))
 );
 
 -- Create indexes for user_profiles
 CREATE INDEX IF NOT EXISTS idx_user_profiles_phone ON user_profiles(whatsapp_phone);
 CREATE INDEX IF NOT EXISTS idx_user_profiles_tier ON user_profiles(customer_tier);
+CREATE INDEX IF NOT EXISTS idx_user_subscription ON user_profiles(subscription);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_city ON user_profiles(city);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_state ON user_profiles(state);
+CREATE INDEX IF NOT EXISTS idx_user_profiles_zipcode ON user_profiles(zipcode);
 
 -- Create whatsapp_messages table
 CREATE TABLE IF NOT EXISTS whatsapp_messages (
@@ -44,9 +117,12 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
     media_type VARCHAR(50),
     media_size INTEGER,
     status VARCHAR(20) DEFAULT 'processing',
+    direction VARCHAR(20) DEFAULT 'incoming',
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT check_direction CHECK (direction IN ('incoming', 'outgoing')),
+    CONSTRAINT whatsapp_messages_status_check CHECK (status IN ('processing', 'processed', 'failed', 'sent', 'delivered', 'read', 'received'))
 );
 
 -- Create indexes for whatsapp_messages
@@ -54,6 +130,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_message_id ON whatsapp_messages(message_
 CREATE INDEX IF NOT EXISTS idx_messages_from_phone ON whatsapp_messages(from_phone);
 CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON whatsapp_messages(timestamp);
 CREATE INDEX IF NOT EXISTS idx_messages_status ON whatsapp_messages(status);
+CREATE INDEX IF NOT EXISTS idx_messages_direction ON whatsapp_messages(direction);
 
 -- Create message_queue table (for SQS tracking)
 CREATE TABLE IF NOT EXISTS message_queue (
@@ -69,83 +146,7 @@ CREATE INDEX IF NOT EXISTS idx_queue_message_id ON message_queue(message_id);
 CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
 
 -- =============================================================================
--- SECTION 2: ADD DIRECTION COLUMN (add_direction_column.sql)
--- =============================================================================
-
--- Add direction column if it doesn't exist
-DO $$ 
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'whatsapp_messages' AND column_name = 'direction'
-    ) THEN
-        ALTER TABLE whatsapp_messages 
-        ADD COLUMN direction VARCHAR(20) DEFAULT 'incoming';
-    END IF;
-END $$;
-
--- Add check constraint for direction (drop first if exists)
-ALTER TABLE whatsapp_messages 
-DROP CONSTRAINT IF EXISTS check_direction;
-
-ALTER TABLE whatsapp_messages 
-ADD CONSTRAINT check_direction CHECK (direction IN ('incoming', 'outgoing'));
-
--- Create index for direction
-CREATE INDEX IF NOT EXISTS idx_messages_direction ON whatsapp_messages(direction);
-
--- Update existing NULL values to 'incoming'
-UPDATE whatsapp_messages 
-SET direction = 'incoming' 
-WHERE direction IS NULL;
-
--- =============================================================================
--- SECTION 3: ADD SUBSCRIPTION COLUMN (add_subscription_column.sql)
--- =============================================================================
-
--- Add subscription column if it doesn't exist
-DO $$ 
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'user_profiles' AND column_name = 'subscription'
-    ) THEN
-        ALTER TABLE user_profiles 
-        ADD COLUMN subscription VARCHAR(20) DEFAULT 'subscribed';
-    END IF;
-END $$;
-
--- Add subscription check constraint (drop first if exists)
-ALTER TABLE user_profiles 
-DROP CONSTRAINT IF EXISTS user_profiles_subscription_check;
-
-ALTER TABLE user_profiles
-ADD CONSTRAINT user_profiles_subscription_check 
-CHECK (subscription IN ('subscribed', 'unsubscribed'));
-
--- Create index for subscription
-CREATE INDEX IF NOT EXISTS idx_user_subscription ON user_profiles(subscription);
-
--- Add subscription_updated_at column if it doesn't exist
-DO $$ 
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'user_profiles' AND column_name = 'subscription_updated_at'
-    ) THEN
-        ALTER TABLE user_profiles
-        ADD COLUMN subscription_updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-    END IF;
-END $$;
-
--- Set all existing users to subscribed
-UPDATE user_profiles 
-SET subscription = 'subscribed', 
-    subscription_updated_at = CURRENT_TIMESTAMP
-WHERE subscription IS NULL;
-
--- =============================================================================
--- SECTION 4: ADD BUSINESS METRICS TABLE (add_business_metrics_table.sql)
+-- SECTION 2: ADD BUSINESS METRICS TABLE (add_business_metrics_table.sql)
 -- =============================================================================
 
 -- Create business_metrics table
@@ -198,24 +199,7 @@ CREATE INDEX IF NOT EXISTS idx_message_templates_category ON message_templates(c
 CREATE INDEX IF NOT EXISTS idx_message_templates_active ON message_templates(is_active);
 
 -- =============================================================================
--- SECTION 5: UPDATE STATUS VALUES (update_status_values.sql)
--- =============================================================================
-
--- Drop existing status check constraint if it exists
-ALTER TABLE whatsapp_messages 
-DROP CONSTRAINT IF EXISTS whatsapp_messages_status_check;
-
--- Add new status check constraint with all valid values
-ALTER TABLE whatsapp_messages 
-ADD CONSTRAINT whatsapp_messages_status_check 
-CHECK (status IN ('processing', 'processed', 'failed', 'sent', 'delivered', 'read', 'received'));
-
--- Update default value for status column
-ALTER TABLE whatsapp_messages 
-ALTER COLUMN status SET DEFAULT 'processing';
-
--- =============================================================================
--- SECTION 6: ADD COMMENTS AND DOCUMENTATION
+-- SECTION 3: ADD COMMENTS AND DOCUMENTATION
 -- =============================================================================
 
 COMMENT ON TABLE user_profiles IS 'Customer profile information for WhatsApp users';

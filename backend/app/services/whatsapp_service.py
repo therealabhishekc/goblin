@@ -396,8 +396,8 @@ class WhatsAppService:
         return self.analytics_repo.get_total_metrics_summary()
     
     def search_users(self, query: str) -> List[dict]:
-        """Search users by business name"""
-        users = self.user_repo.get_by_business_name(query)
+        """Search users by display name or city"""
+        users = self.user_repo.search_by_name_or_city(query)
         return [self._user_to_dict(user) for user in users]
     
     def get_recent_messages(self, hours: int = 24) -> List[dict]:
@@ -540,7 +540,12 @@ class WhatsAppService:
             "id": str(user.id),
             "whatsapp_phone": user.whatsapp_phone,
             "display_name": user.display_name,
-            "business_name": user.business_name,
+            "address_line1": user.address_line1,
+            "address_line2": user.address_line2,
+            "city": user.city,
+            "state": user.state,
+            "zipcode": user.zipcode,
+            "email": user.email,
             "customer_tier": user.customer_tier,
             "tags": user.tags,
             "total_messages": user.total_messages,

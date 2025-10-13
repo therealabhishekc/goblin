@@ -38,7 +38,11 @@ async def create_user(
     {
         "whatsapp_phone": "+1234567890",
         "display_name": "John Doe",
-        "business_name": "Doe's Store",
+        "address_line1": "123 Main St",
+        "address_line2": "Apt 4B",
+        "city": "New York",
+        "state": "NY",
+        "zipcode": "10001",
         "email": "john@example.com",
         "customer_tier": "premium",
         "tags": ["vip", "regular"],
@@ -60,7 +64,11 @@ async def create_user(
     user_profile = UserProfile(
         whatsapp_phone=user_data.whatsapp_phone,
         display_name=user_data.display_name,
-        business_name=user_data.business_name,
+        address_line1=user_data.address_line1,
+        address_line2=user_data.address_line2,
+        city=user_data.city,
+        state=user_data.state,
+        zipcode=user_data.zipcode,
         email=user_data.email,
         customer_tier=user_data.customer_tier,
         tags=user_data.tags,
@@ -81,7 +89,11 @@ async def create_user(
             id=str(created_user.id),
             whatsapp_phone=created_user.whatsapp_phone,
             display_name=created_user.display_name,
-            business_name=created_user.business_name,
+            address_line1=created_user.address_line1,
+            address_line2=created_user.address_line2,
+            city=created_user.city,
+            state=created_user.state,
+            zipcode=created_user.zipcode,
             email=created_user.email,
             customer_tier=created_user.customer_tier,
             tags=created_user.tags or [],
@@ -240,7 +252,11 @@ async def list_users(
                     "id": str(u.id),
                     "whatsapp_phone": u.whatsapp_phone,
                     "display_name": u.display_name,
-                    "business_name": u.business_name,
+                    "address_line1": u.address_line1,
+                    "address_line2": u.address_line2,
+                    "city": u.city,
+                    "state": u.state,
+                    "zipcode": u.zipcode,
                     "customer_tier": u.customer_tier,
                     "tags": u.tags or [],
                     "is_active": u.is_active,
@@ -257,17 +273,17 @@ async def list_users(
 
 @router.get("/search/query")
 async def search_users(
-    q: str = Query(..., min_length=1, description="Search query for business name or display name"),
+    q: str = Query(..., min_length=1, description="Search query for display name or city"),
     db: Session = Depends(get_database_session)
 ):
     """
-    Search users by business name or display name
+    Search users by display name or city
     
     Used by: Search features in frontend
     
     Example:
     ```
-    GET /api/users/search/query?q=Doe's
+    GET /api/users/search/query?q=New York
     ```
     """
     try:
@@ -302,8 +318,8 @@ async def bulk_import_users(
     
     CSV Format:
     ```csv
-    whatsapp_phone,display_name,business_name,email,customer_tier,tags,notes
-    +1234567890,John Doe,Doe's Store,john@example.com,premium,"vip,regular",Great customer
+    whatsapp_phone,display_name,address_line1,address_line2,city,state,zipcode,email,customer_tier,tags,notes
+    +1234567890,John Doe,123 Main St,Apt 4B,New York,NY,10001,john@example.com,premium,"vip,regular",Great customer
     ```
     
     Returns:
@@ -373,7 +389,11 @@ async def bulk_import_users(
                 user_profile = UserProfile(
                     whatsapp_phone=phone,
                     display_name=row.get('display_name', '').strip() or None,
-                    business_name=row.get('business_name', '').strip() or None,
+                    address_line1=row.get('address_line1', '').strip() or None,
+                    address_line2=row.get('address_line2', '').strip() or None,
+                    city=row.get('city', '').strip() or None,
+                    state=row.get('state', '').strip() or None,
+                    zipcode=row.get('zipcode', '').strip() or None,
                     email=row.get('email', '').strip() or None,
                     customer_tier=row.get('customer_tier', 'regular').strip() or 'regular',
                     tags=tags if tags else [],
@@ -391,7 +411,7 @@ async def bulk_import_users(
                 results["created_users"].append({
                     "row": row_num,
                     "phone": phone,
-                    "name": created_user.display_name or created_user.business_name or phone
+                    "name": created_user.display_name or phone
                 })
                 
             except Exception as e:
@@ -482,7 +502,11 @@ async def get_user_stats(
         stats = {
             "phone_number": phone_number,
             "display_name": user.display_name,
-            "business_name": user.business_name,
+            "address_line1": user.address_line1,
+            "address_line2": user.address_line2,
+            "city": user.city,
+            "state": user.state,
+            "zipcode": user.zipcode,
             "customer_tier": user.customer_tier,
             "total_messages": user.total_messages,
             "messages_received": len(incoming),

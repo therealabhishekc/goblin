@@ -23,7 +23,11 @@ class UserProfile(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     whatsapp_phone = Column(String(20), unique=True, nullable=False, index=True)
     display_name = Column(String(100))
-    business_name = Column(String(200))
+    address_line1 = Column(String(200))
+    address_line2 = Column(String(200))
+    city = Column(String(100))
+    state = Column(String(50))
+    zipcode = Column(String(20))
     email = Column(String(255))
     
     # Customer management fields
