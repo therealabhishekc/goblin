@@ -220,7 +220,30 @@ COMMENT ON COLUMN whatsapp_messages.status IS
 'Message status: processing (being processed), processed (completed successfully), failed (processing failed), sent (outgoing message sent), delivered (message delivered to customer), read (message read by recipient)';
 
 -- =============================================================================
--- SECTION 7: GRANT PERMISSIONS TO APP USER
+-- SECTION 4: CREATE APPLICATION USER
+-- =============================================================================
+
+-- Create app_user for IAM authentication (no password needed)
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
+        -- Create user without password (for IAM authentication)
+        CREATE USER app_user;
+        
+        -- Grant IAM authentication role
+        EXECUTE 'GRANT rds_iam TO app_user';
+        
+        RAISE NOTICE 'Created app_user with IAM authentication';
+    ELSE
+        RAISE NOTICE 'app_user already exists';
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Note: Could not grant rds_iam role. This is expected if rds_iam role does not exist in non-RDS environments.';
+END $$;
+
+-- =============================================================================
+-- SECTION 5: GRANT PERMISSIONS TO APP USER
 -- =============================================================================
 
 DO $$ 
@@ -235,7 +258,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- SECTION 8: VERIFICATION QUERIES
+-- SECTION 6: VERIFICATION QUERIES
 -- =============================================================================
 
 -- Show all tables
@@ -275,7 +298,7 @@ FROM whatsapp_messages
 GROUP BY direction;
 
 -- =============================================================================
--- SECTION 9: MARKETING CAMPAIGNS TABLES
+-- SECTION 7: MARKETING CAMPAIGNS TABLES
 -- =============================================================================
 -- Marketing Campaign Management System
 -- Supports sending 10,000+ marketing messages with rate limiting (250/day)
@@ -525,7 +548,7 @@ CREATE TRIGGER update_analytics_updated_at BEFORE UPDATE ON campaign_analytics
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- =============================================================================
--- SECTION 11: GRANT PERMISSIONS FOR MARKETING TABLES
+-- SECTION 8: GRANT PERMISSIONS FOR MARKETING TABLES
 -- =============================================================================
 
 DO $$ 
@@ -539,7 +562,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- SECTION 12: HELPFUL VIEWS FOR MARKETING CAMPAIGNS
+-- SECTION 9: HELPFUL VIEWS FOR MARKETING CAMPAIGNS
 -- =============================================================================
 
 -- View: Active campaigns with progress
@@ -602,7 +625,7 @@ BEGIN
 END $$;
 
 -- =============================================================================
--- SECTION 13: FINAL VERIFICATION QUERIES
+-- SECTION 10: FINAL VERIFICATION QUERIES
 -- =============================================================================
 
 -- Show all tables (including marketing tables)

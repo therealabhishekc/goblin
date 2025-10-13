@@ -135,7 +135,11 @@ def init_database():
             pool_recycle=600,  # Recycle connections every 10 minutes
             pool_size=10,
             max_overflow=20,
-            connect_args={"connect_timeout": 10}
+            connect_args={
+                "connect_timeout": 30,  # Increased from 10 to 30 seconds
+                "sslmode": "require",  # Explicitly require SSL
+                "sslrootcert": "system",  # Use system CA certificates
+            }
         )
         
         # Add event listener to refresh token on new connections (for IAM auth)
