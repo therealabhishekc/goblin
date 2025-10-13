@@ -94,7 +94,7 @@ def create_database_url():
             # Use token refresher instead of direct token generation
             token = token_refresher.get_fresh_token()
             encoded_token = quote_plus(token)
-            url = f"postgresql://{DB_USER}:{encoded_token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
+            url = f"postgresql://{DB_USER}:{encoded_token}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=verify-full&sslrootcert=system"
             logger.info(f"✅ IAM database URL created for {DB_HOST}")
             return url
         except Exception as e:
@@ -109,7 +109,7 @@ def create_database_url():
     
     # Last resort: password auth
     db_password = os.getenv("DB_PASSWORD", "password")
-    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
+    url = f"postgresql://{DB_USER}:{db_password}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=verify-full&sslrootcert=system"
     logger.info("🔑 Using password authentication")
     return url
 
@@ -137,7 +137,7 @@ def init_database():
             max_overflow=20,
             connect_args={
                 "connect_timeout": 30,  # Increased from 10 to 30 seconds
-                "sslmode": "require",  # Explicitly require SSL
+                "sslmode": "verify-full",  # Use verify-full with 
                 "sslrootcert": "system",  # Use system CA certificates
             }
         )
