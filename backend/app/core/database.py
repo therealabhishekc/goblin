@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text, event
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
-from typing import Generator
+from typing import Generator, Optional
 from contextlib import contextmanager
 from botocore.exceptions import ClientError
 from app.core.logging import logger
@@ -33,8 +33,12 @@ AWS_RDS_CERT_BUNDLE_URL = os.getenv(
 )
 
 
-def _ensure_ssl_root_cert(cert_path: str | None) -> str | None:
-    """Ensure the SSL root certificate exists locally, downloading it if necessary."""
+def _ensure_ssl_root_cert(cert_path: Optional[str]) -> Optional[str]:
+    """Ensure the SSL root certificate exists locally, downloading it if necessary.
+
+    Using ``Optional`` keeps compatibility with Python runtimes that do not support
+    the PEP 604 ``|`` union syntax (e.g. AWS App Runner's Python 3.9 image).
+    """
     if not cert_path:
         logger.warning(
             "⚠️ DB_SSL_ROOT_CERT not provided; relying on system trust store for database SSL verification."
