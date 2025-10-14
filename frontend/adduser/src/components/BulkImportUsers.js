@@ -66,7 +66,7 @@ function BulkImportUsers() {
 
     try {
       const response = await fetch(
-        'https://hwwsxxpemc.us-east-1.awsapprunner.com/api/users/bulk-import',
+        'https://2mm6fm7ffm.us-east-1.awsapprunner.com/api/users/bulk-import',
         {
           method: 'POST',
           body: formData
@@ -122,10 +122,10 @@ function BulkImportUsers() {
   };
 
   const downloadTemplate = () => {
-    const csvContent = `whatsapp_phone,display_name,business_name,email,customer_tier,tags,notes
-+1234567890,John Doe,Doe's Store,john@example.com,premium,"vip,regular",Great customer
-+0987654321,Jane Smith,Smith Co,jane@example.com,regular,"new",First time buyer
-+1122334455,Bob Johnson,Bob's Shop,bob@example.com,vip,"vip,loyal",Top customer`;
+    const csvContent = `whatsapp_phone,display_name,address1,address2,city,state,zipcode,email,customer_tier,tags,notes
++1234567890,John Doe,123 Main St,Apt 4B,New York,NY,10001,john@example.com,premium,"vip,regular",Great customer
++0987654321,Jane Smith,456 Oak Ave,,Los Angeles,CA,90001,jane@example.com,regular,"new",First time buyer
++1122334455,Bob Johnson,789 Pine Rd,Suite 100,Chicago,IL,60601,bob@example.com,vip,"vip,loyal",Top customer`;
 
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);

@@ -12,7 +12,11 @@ function UpdateUserForm() {
   
   const [formData, setFormData] = useState({
     display_name: '',
-    business_name: '',
+    address1: '',
+    address2: '',
+    city: '',
+    state: '',
+    zipcode: '',
     email: '',
     customer_tier: 'regular',
     tags: [],
@@ -35,7 +39,7 @@ function UpdateUserForm() {
 
     try {
       const response = await fetch(
-        `https://hwwsxxpemc.us-east-1.awsapprunner.com/api/users/${encodeURIComponent(searchPhone.trim())}`
+        `https://2mm6fm7ffm.us-east-1.awsapprunner.com/api/users/${encodeURIComponent(searchPhone.trim())}`
       );
 
       if (response.ok) {
@@ -45,7 +49,11 @@ function UpdateUserForm() {
         // Populate form with user data
         setFormData({
           display_name: userData.display_name || '',
-          business_name: userData.business_name || '',
+          address1: userData.address1 || '',
+          address2: userData.address2 || '',
+          city: userData.city || '',
+          state: userData.state || '',
+          zipcode: userData.zipcode || '',
           email: userData.email || '',
           customer_tier: userData.customer_tier || 'regular',
           tags: userData.tags || [],
@@ -85,7 +93,11 @@ function UpdateUserForm() {
     // Prepare update data (only send changed fields)
     const updateData = {
       display_name: formData.display_name.trim() || null,
-      business_name: formData.business_name.trim() || null,
+      address1: formData.address1.trim() || null,
+      address2: formData.address2.trim() || null,
+      city: formData.city.trim() || null,
+      state: formData.state.trim() || null,
+      zipcode: formData.zipcode.trim() || null,
       email: formData.email.trim() || null,
       customer_tier: formData.customer_tier,
       tags: formData.tags,
@@ -119,7 +131,11 @@ function UpdateUserForm() {
         // Refresh form with updated data
         setFormData({
           display_name: result.display_name || '',
-          business_name: result.business_name || '',
+          address1: result.address1 || '',
+          address2: result.address2 || '',
+          city: result.city || '',
+          state: result.state || '',
+          zipcode: result.zipcode || '',
           email: result.email || '',
           customer_tier: result.customer_tier || 'regular',
           tags: result.tags || [],
@@ -178,7 +194,11 @@ function UpdateUserForm() {
     if (user) {
       setFormData({
         display_name: user.display_name || '',
-        business_name: user.business_name || '',
+        address1: user.address1 || '',
+        address2: user.address2 || '',
+        city: user.city || '',
+        state: user.state || '',
+        zipcode: user.zipcode || '',
         email: user.email || '',
         customer_tier: user.customer_tier || 'regular',
         tags: user.tags || [],

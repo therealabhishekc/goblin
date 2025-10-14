@@ -6,7 +6,11 @@ function AddUserForm() {
   const [formData, setFormData] = useState({
     whatsapp_phone: '',
     display_name: '',
-    business_name: '',
+    address1: '',
+    address2: '',
+    city: '',
+    state: '',
+    zipcode: '',
     email: '',
     customer_tier: 'regular',
     tags: [],
@@ -62,7 +66,11 @@ function AddUserForm() {
     const submitData = {
       whatsapp_phone: formData.whatsapp_phone.trim(),
       display_name: formData.display_name.trim() || null,
-      business_name: formData.business_name.trim() || null,
+      address1: formData.address1.trim() || null,
+      address2: formData.address2.trim() || null,
+      city: formData.city.trim() || null,
+      state: formData.state.trim() || null,
+      zipcode: formData.zipcode.trim() || null,
       email: formData.email.trim() || null,
       customer_tier: formData.customer_tier,
       tags: formData.tags,
@@ -70,7 +78,7 @@ function AddUserForm() {
     };
     
     try {
-      const response = await fetch('https://hwwsxxpemc.us-east-1.awsapprunner.com/api/users', {
+      const response = await fetch('https://2mm6fm7ffm.us-east-1.awsapprunner.com/api/users', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,7 +117,11 @@ function AddUserForm() {
     setFormData({
       whatsapp_phone: '',
       display_name: '',
-      business_name: '',
+      address1: '',
+      address2: '',
+      city: '',
+      state: '',
+      zipcode: '',
       email: '',
       customer_tier: 'regular',
       tags: [],

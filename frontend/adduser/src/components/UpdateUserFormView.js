@@ -74,10 +74,6 @@ function UpdateUserFormView({
                 <span className="info-value">{user.display_name || 'N/A'}</span>
               </div>
               <div className="info-item">
-                <span className="info-label">Business:</span>
-                <span className="info-value">{user.business_name || 'N/A'}</span>
-              </div>
-              <div className="info-item">
                 <span className="info-label">Email:</span>
                 <span className="info-value">{user.email || 'N/A'}</span>
               </div>
@@ -86,6 +82,26 @@ function UpdateUserFormView({
                 <span className={`tier-badge tier-${user.customer_tier}`}>
                   {user.customer_tier}
                 </span>
+              </div>
+              <div className="info-item full-width">
+                <span className="info-label">Address 1:</span>
+                <span className="info-value">{user.address1 || 'N/A'}</span>
+              </div>
+              <div className="info-item full-width">
+                <span className="info-label">Address 2:</span>
+                <span className="info-value">{user.address2 || 'N/A'}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">City:</span>
+                <span className="info-value">{user.city || 'N/A'}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">State:</span>
+                <span className="info-value">{user.state || 'N/A'}</span>
+              </div>
+              <div className="info-item">
+                <span className="info-label">Zip Code:</span>
+                <span className="info-value">{user.zipcode || 'N/A'}</span>
               </div>
               <div className="info-item">
                 <span className="info-label">Subscription:</span>
@@ -133,21 +149,6 @@ function UpdateUserFormView({
               </div>
 
               <div className="form-group">
-                <label htmlFor="business_name">Business Name</label>
-                <input
-                  type="text"
-                  id="business_name"
-                  name="business_name"
-                  value={formData.business_name}
-                  onChange={handleInputChange}
-                  placeholder="Doe's Store"
-                  disabled={loading}
-                />
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-group">
                 <label htmlFor="email">Email</label>
                 <input
                   type="email"
@@ -159,21 +160,88 @@ function UpdateUserFormView({
                   disabled={loading}
                 />
               </div>
-
+            </div>
+            
+            <div className="form-group">
+              <label htmlFor="address1">Address Line 1</label>
+              <input
+                type="text"
+                id="address1"
+                name="address1"
+                value={formData.address1}
+                onChange={handleInputChange}
+                placeholder="123 Main Street"
+                disabled={loading}
+              />
+            </div>
+            
+            <div className="form-group">
+              <label htmlFor="address2">Address Line 2</label>
+              <input
+                type="text"
+                id="address2"
+                name="address2"
+                value={formData.address2}
+                onChange={handleInputChange}
+                placeholder="Apt 4B (Optional)"
+                disabled={loading}
+              />
+            </div>
+            
+            <div className="form-row">
               <div className="form-group">
-                <label htmlFor="customer_tier">Customer Tier</label>
-                <select
-                  id="customer_tier"
-                  name="customer_tier"
-                  value={formData.customer_tier}
+                <label htmlFor="city">City</label>
+                <input
+                  type="text"
+                  id="city"
+                  name="city"
+                  value={formData.city}
                   onChange={handleInputChange}
+                  placeholder="New York"
                   disabled={loading}
-                >
-                  <option value="regular">Regular</option>
-                  <option value="premium">Premium</option>
-                  <option value="vip">VIP</option>
-                </select>
+                />
               </div>
+              
+              <div className="form-group">
+                <label htmlFor="state">State</label>
+                <input
+                  type="text"
+                  id="state"
+                  name="state"
+                  value={formData.state}
+                  onChange={handleInputChange}
+                  placeholder="NY"
+                  disabled={loading}
+                />
+              </div>
+              
+              <div className="form-group">
+                <label htmlFor="zipcode">Zip Code</label>
+                <input
+                  type="text"
+                  id="zipcode"
+                  name="zipcode"
+                  value={formData.zipcode}
+                  onChange={handleInputChange}
+                  placeholder="10001"
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="customer_tier">Customer Tier</label>
+              <select
+                id="customer_tier"
+                name="customer_tier"
+                value={formData.customer_tier}
+                onChange={handleInputChange}
+                disabled={loading}
+              >
+                <option value="regular">Regular</option>
+                <option value="premium">Premium</option>
+                <option value="vip">VIP</option>
+              </select>
             </div>
 
             <div className="form-group">

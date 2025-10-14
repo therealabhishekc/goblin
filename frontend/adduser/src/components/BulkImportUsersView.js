@@ -52,13 +52,17 @@ function BulkImportUsersView({
           <h4>📄 CSV Format</h4>
           <div className="format-example">
             <code>
-              whatsapp_phone,display_name,business_name,email,customer_tier,tags,notes
+              whatsapp_phone,display_name,address1,address2,city,state,zipcode,email,customer_tier,tags,notes
             </code>
           </div>
           <ul className="format-details">
             <li><strong>whatsapp_phone</strong> - Required (e.g., +1234567890)</li>
             <li><strong>display_name</strong> - Optional (e.g., John Doe)</li>
-            <li><strong>business_name</strong> - Optional (e.g., Doe's Store)</li>
+            <li><strong>address1</strong> - Optional (e.g., 123 Main St)</li>
+            <li><strong>address2</strong> - Optional (e.g., Apt 4B)</li>
+            <li><strong>city</strong> - Optional (e.g., New York)</li>
+            <li><strong>state</strong> - Optional (e.g., NY)</li>
+            <li><strong>zipcode</strong> - Optional (e.g., 10001)</li>
             <li><strong>email</strong> - Optional (e.g., john@example.com)</li>
             <li><strong>customer_tier</strong> - Optional: regular, premium, or vip (default: regular)</li>
             <li><strong>tags</strong> - Optional, comma-separated in quotes (e.g., "vip,regular")</li>
