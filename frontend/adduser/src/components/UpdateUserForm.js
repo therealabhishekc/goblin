@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './UpdateUserForm.css';
 import UpdateUserFormView from './UpdateUserFormView';
+import config from '../config';
 
 function UpdateUserForm() {
   const [searchPhone, setSearchPhone] = useState('');
@@ -39,18 +40,18 @@ function UpdateUserForm() {
 
     try {
       const response = await fetch(
-        `https://2mm6fm7ffm.us-east-1.awsapprunner.com/api/users/${encodeURIComponent(searchPhone.trim())}`
+        `${config.API_URL}/api/users/${encodeURIComponent(searchPhone.trim())}`
       );
 
       if (response.ok) {
         const userData = await response.json();
         setUser(userData);
         
-        // Populate form with user data
+        // Populate form with user data (map backend field names to frontend)
         setFormData({
           display_name: userData.display_name || '',
-          address1: userData.address1 || '',
-          address2: userData.address2 || '',
+          address1: userData.address_line1 || '',
+          address2: userData.address_line2 || '',
           city: userData.city || '',
           state: userData.state || '',
           zipcode: userData.zipcode || '',
@@ -90,11 +91,11 @@ function UpdateUserForm() {
     setLoading(true);
     setAlert(null);
 
-    // Prepare update data (only send changed fields)
+    // Prepare update data (map frontend field names to backend field names)
     const updateData = {
       display_name: formData.display_name.trim() || null,
-      address1: formData.address1.trim() || null,
-      address2: formData.address2.trim() || null,
+      address_line1: formData.address1.trim() || null,
+      address_line2: formData.address2.trim() || null,
       city: formData.city.trim() || null,
       state: formData.state.trim() || null,
       zipcode: formData.zipcode.trim() || null,
@@ -107,7 +108,7 @@ function UpdateUserForm() {
 
     try {
       const response = await fetch(
-        `https://hwwsxxpemc.us-east-1.awsapprunner.com/api/users/${encodeURIComponent(user.whatsapp_phone)}`,
+        `${config.API_URL}/api/users/${encodeURIComponent(user.whatsapp_phone)}`,
         {
           method: 'PUT',
           headers: {
@@ -128,11 +129,11 @@ function UpdateUserForm() {
         // Update the user state with new data
         setUser(result);
         
-        // Refresh form with updated data
+        // Refresh form with updated data (map backend field names to frontend)
         setFormData({
           display_name: result.display_name || '',
-          address1: result.address1 || '',
-          address2: result.address2 || '',
+          address1: result.address_line1 || '',
+          address2: result.address_line2 || '',
           city: result.city || '',
           state: result.state || '',
           zipcode: result.zipcode || '',
@@ -194,8 +195,8 @@ function UpdateUserForm() {
     if (user) {
       setFormData({
         display_name: user.display_name || '',
-        address1: user.address1 || '',
-        address2: user.address2 || '',
+        address1: user.address_line1 || '',
+        address2: user.address_line2 || '',
         city: user.city || '',
         state: user.state || '',
         zipcode: user.zipcode || '',

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './AddUserForm.css';
 import AddUserFormView from './AddUserFormView';
+import config from '../config';
 
 function AddUserForm() {
   const [formData, setFormData] = useState({
@@ -62,12 +63,12 @@ function AddUserForm() {
       return;
     }
     
-    // Prepare data - remove empty fields
+    // Prepare data - map frontend field names to backend field names
     const submitData = {
       whatsapp_phone: formData.whatsapp_phone.trim(),
       display_name: formData.display_name.trim() || null,
-      address1: formData.address1.trim() || null,
-      address2: formData.address2.trim() || null,
+      address_line1: formData.address1.trim() || null,
+      address_line2: formData.address2.trim() || null,
       city: formData.city.trim() || null,
       state: formData.state.trim() || null,
       zipcode: formData.zipcode.trim() || null,
@@ -78,7 +79,7 @@ function AddUserForm() {
     };
     
     try {
-      const response = await fetch('https://2mm6fm7ffm.us-east-1.awsapprunner.com/api/users', {
+      const response = await fetch(`${config.API_URL}/api/users`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

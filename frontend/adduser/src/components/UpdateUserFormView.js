@@ -85,11 +85,11 @@ function UpdateUserFormView({
               </div>
               <div className="info-item full-width">
                 <span className="info-label">Address 1:</span>
-                <span className="info-value">{user.address1 || 'N/A'}</span>
+                <span className="info-value">{user.address_line1 || 'N/A'}</span>
               </div>
               <div className="info-item full-width">
                 <span className="info-label">Address 2:</span>
-                <span className="info-value">{user.address2 || 'N/A'}</span>
+                <span className="info-value">{user.address_line2 || 'N/A'}</span>
               </div>
               <div className="info-item">
                 <span className="info-label">City:</span>
