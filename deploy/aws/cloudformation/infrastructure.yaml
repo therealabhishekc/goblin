@@ -150,7 +150,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub 'whatsapp-incoming-${Environment}'
-      VisibilityTimeoutSeconds: 300  # 5 minutes for processing
+      VisibilityTimeout: 300  # 5 minutes for processing
       MessageRetentionPeriod: 1209600  # 14 days
       ReceiveMessageWaitTimeSeconds: 20  # Long polling
       RedrivePolicy:
@@ -183,7 +183,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub 'whatsapp-outgoing-${Environment}'
-      VisibilityTimeoutSeconds: 60  # 1 minute for sending
+      VisibilityTimeout: 60  # 1 minute for sending
       MessageRetentionPeriod: 1209600  # 14 days
       ReceiveMessageWaitTimeSeconds: 20  # Long polling
       RedrivePolicy:
