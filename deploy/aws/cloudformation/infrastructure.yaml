@@ -216,7 +216,7 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub 'whatsapp-analytics-${Environment}'
-      VisibilityTimeoutSeconds: 120  # 2 minutes for analytics processing
+      VisibilityTimeout: 120  # 2 minutes for analytics processing
       MessageRetentionPeriod: 1209600  # 14 days
       ReceiveMessageWaitTimeSeconds: 20  # Long polling
       RedrivePolicy:
@@ -754,7 +754,7 @@ Resources:
     Properties:
       QueueName: !Sub '${Environment}-whatsapp-archival-dlq'
       MessageRetentionPeriod: 1209600  # 14 days
-      VisibilityTimeoutSeconds: 60
+      VisibilityTimeout: 60
       Tags:
         - Key: Environment
           Value: !Ref Environment
