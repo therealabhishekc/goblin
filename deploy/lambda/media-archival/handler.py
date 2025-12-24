@@ -54,7 +54,7 @@ class MediaArchivalService:
         self.s3_client = boto3.client('s3')
         self.bucket_name = os.environ['S3_DATA_BUCKET']
         self.db_url = os.environ['DATABASE_URL']
-        self.media_threshold_days = int(os.environ.get('MEDIA_THRESHOLD_DAYS', '30'))
+        self.media_threshold_days = int(os.environ.get('MEDIA_THRESHOLD_DAYS', '0'))
         self.batch_size = int(os.environ.get('BATCH_SIZE', '50'))
         
         logger.info(f"Initialized with bucket: {self.bucket_name}, threshold: {self.media_threshold_days} days")
