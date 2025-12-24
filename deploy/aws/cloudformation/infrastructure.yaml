@@ -485,24 +485,42 @@ Resources:
               StartCommand: python backend/start.py
               Port: "8000"
               RuntimeEnvironmentVariables:
-                ENVIRONMENT: !Ref Environment
-                AWS_REGION: !Ref AWS::Region
-                LOG_LEVEL: !If [IsProduction, 'INFO', 'INFO']
-                DATABASE_URL: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
-                DB_HOST: !GetAtt PostgreSQLDB.Endpoint.Address
-                DB_PORT: !Sub '${PostgreSQLDB.Endpoint.Port}'
-                DB_NAME: !Sub 'whatsapp_business_${Environment}'
-                DB_USER: 'app_user'
-                USE_IAM_AUTH: 'true'
-                WHATSAPP_SECRETS_NAME: !Ref WhatsAppCredentialsSecret
-                S3_DATA_BUCKET: !Ref WhatsAppDataBucket
-                DYNAMODB_TABLE: !Ref MessageDeduplicationTable
-                INCOMING_QUEUE_URL: !Ref IncomingMessageQueue
-                OUTGOING_QUEUE_URL: !Ref OutgoingMessageQueue
-                ANALYTICS_QUEUE_URL: !Ref AnalyticsQueue
-                INCOMING_DLQ_URL: !Ref IncomingMessageDLQ
-                OUTGOING_DLQ_URL: !Ref OutgoingMessageDLQ
-                ANALYTICS_DLQ_URL: !Ref AnalyticsDLQ
+                - Name: ENVIRONMENT
+                  Value: !Ref Environment
+                - Name: AWS_REGION
+                  Value: !Ref AWS::Region
+                - Name: LOG_LEVEL
+                  Value: !If [IsProduction, 'INFO', 'INFO']
+                - Name: DATABASE_URL
+                  Value: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
+                - Name: DB_HOST
+                  Value: !GetAtt PostgreSQLDB.Endpoint.Address
+                - Name: DB_PORT
+                  Value: !Sub '${PostgreSQLDB.Endpoint.Port}'
+                - Name: DB_NAME
+                  Value: !Sub 'whatsapp_business_${Environment}'
+                - Name: DB_USER
+                  Value: 'app_user'
+                - Name: USE_IAM_AUTH
+                  Value: 'true'
+                - Name: WHATSAPP_SECRETS_NAME
+                  Value: !Ref WhatsAppCredentialsSecret
+                - Name: S3_DATA_BUCKET
+                  Value: !Ref WhatsAppDataBucket
+                - Name: DYNAMODB_TABLE
+                  Value: !Ref MessageDeduplicationTable
+                - Name: INCOMING_QUEUE_URL
+                  Value: !Ref IncomingMessageQueue
+                - Name: OUTGOING_QUEUE_URL
+                  Value: !Ref OutgoingMessageQueue
+                - Name: ANALYTICS_QUEUE_URL
+                  Value: !Ref AnalyticsQueue
+                - Name: INCOMING_DLQ_URL
+                  Value: !Ref IncomingMessageDLQ
+                - Name: OUTGOING_DLQ_URL
+                  Value: !Ref OutgoingMessageDLQ
+                - Name: ANALYTICS_DLQ_URL
+                  Value: !Ref AnalyticsDLQ
       InstanceConfiguration:
         Cpu: !If [IsProduction, '1 vCPU', '0.25 vCPU']
         Memory: !If [IsProduction, '2 GB', '0.5 GB']
