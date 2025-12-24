@@ -471,6 +471,7 @@ Resources:
       SourceConfiguration:
         AuthenticationConfiguration:
           ConnectionArn: !Ref GitHubConnectionArn
+        AutoDeploymentsEnabled: true
         CodeRepository:
           RepositoryUrl: !Ref GitHubRepositoryUrl
           SourceCodeVersion:
@@ -502,7 +503,6 @@ Resources:
                 INCOMING_DLQ_URL: !Ref IncomingMessageDLQ
                 OUTGOING_DLQ_URL: !Ref OutgoingMessageDLQ
                 ANALYTICS_DLQ_URL: !Ref AnalyticsDLQ
-        AutoDeploymentsEnabled: true
       InstanceConfiguration:
         Cpu: !If [IsProduction, '1 vCPU', '0.25 vCPU']
         Memory: !If [IsProduction, '2 GB', '0.5 GB']
