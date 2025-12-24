@@ -19,7 +19,7 @@ from enum import Enum
 import aioboto3
 from botocore.exceptions import ClientError
 
-from app.config import get_settings
+from app.core.config import get_settings
 from app.core.logging import logger
 settings = get_settings()
 

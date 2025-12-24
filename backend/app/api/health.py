@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.core.database import get_database_session
-from app.config import get_settings
+from app.core.config import get_settings
 import time
 
 # SQS integration

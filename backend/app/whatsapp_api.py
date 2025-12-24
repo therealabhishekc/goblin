@@ -4,7 +4,7 @@ import json
 from typing import Dict, Any, Optional, List
 
 from app.core.logging import logger
-from app.config import get_settings
+from app.core.config import get_settings
 from app.utils.constants import WHATSAPP_BASE_URL
 
 # Get settings instance

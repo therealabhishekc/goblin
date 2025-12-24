@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import asyncio
 import time
 
-from app.config import get_settings
+from app.core.config import get_settings
 from app.core.database import init_database
 from app.core.logging import logger
 
@@ -35,7 +35,10 @@ try:
     from app.api import users
 except ImportError:
     users = None
-from app.api_endpoints import router as legacy_api_router
+try:
+    from app.api import analytics
+except ImportError:
+    analytics = None
 
 # SQS Workers
 try:
@@ -146,7 +149,7 @@ async def lifespan(app: FastAPI):
 settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
-    description="Enterprise WhatsApp Business API with PostgreSQL integration",
+    description="Enterprise WhatsApp Business API",
     version=settings.app_version,
     debug=settings.debug,
     lifespan=lifespan
@@ -156,12 +159,6 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins (for development/testing)
-    # For production, use specific origins:
-    # allow_origins=[
-    #     "http://localhost:3000", 
-    #     "http://localhost:3001",
-    #     "https://your-production-domain.com"
-    # ],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
     allow_headers=["*"],  # Allow all headers
@@ -205,12 +202,13 @@ if marketing:
     except Exception as e:
         logger.warning(f"⚠️  Marketing API endpoints failed to load: {e}")
 
-# Legacy endpoints (for backward compatibility)
-try:
-    app.include_router(legacy_api_router)
-    logger.info("✅ Legacy API endpoints loaded")
-except Exception as e:
-    logger.warning(f"⚠️  Legacy API endpoints failed to load: {e}")
+# Include analytics router if available
+if analytics:
+    try:
+        app.include_router(analytics.router)
+        logger.info("✅ Analytics API endpoints loaded")
+    except Exception as e:
+        logger.warning(f"⚠️  Analytics API endpoints failed to load: {e}")
 
 # Include other routers if available
 try:

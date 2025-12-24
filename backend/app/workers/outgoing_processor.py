@@ -19,7 +19,7 @@ import contextlib
 from app.services.sqs_service import sqs_service, QueueType, SQSMessage
 from app.whatsapp_api import send_whatsapp_message
 from app.core.logging import logger
-from app.config import get_settings
+from app.core.config import get_settings
 from app.repositories.message_repository import MessageRepository
 from app.core.database import get_db_session
 

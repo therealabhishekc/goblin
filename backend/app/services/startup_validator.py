@@ -6,7 +6,7 @@ import asyncio
 from typing import Dict, List, Optional
 from dataclasses import dataclass
 
-from app.config import get_settings
+from app.core.config import get_settings
 from app.core.database import get_db_session, engine, test_database_connection
 from app.core.logging import logger
 from sqlalchemy import text

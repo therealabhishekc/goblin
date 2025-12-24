@@ -24,7 +24,7 @@ from app.services.whatsapp_service import WhatsAppService
 from app.services.sqs_service import send_incoming_message, sqs_service
 from app.services.messaging_service import track_webhook_event
 from app.models.whatsapp import WhatsAppWebhookPayload
-from app.config import get_settings
+from app.core.config import get_settings
 # 🔒 Import race-safe DynamoDB functions
 from app.dynamodb_client import store_message_id_atomic
 # Import startup validation for readiness checks

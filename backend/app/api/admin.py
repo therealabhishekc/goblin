@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 from datetime import datetime
 from botocore.exceptions import ClientError
 
-from app.config import get_settings
+from app.core.config import get_settings
 from app.core.logging import logger
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 

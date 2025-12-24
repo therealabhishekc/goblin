@@ -23,7 +23,7 @@ from app.services.whatsapp_service import WhatsAppService
 from app.core.database import get_db_session, SessionLocal
 from app.repositories.message_repository import MessageRepository
 from app.core.logging import logger
-from app.config import get_settings
+from app.core.config import get_settings
 # 🔒 Import race-safe DynamoDB functions
 from app.dynamodb_client import (
     claim_message_processing, 

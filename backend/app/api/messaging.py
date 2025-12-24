@@ -493,7 +493,7 @@ async def purge_queue(queue_type: str):
     Purge all messages from a specific queue (DANGEROUS - use with caution)
     Only available in development/staging environments
     """
-    from app.config import get_settings
+    from app.core.config import get_settings
     settings = get_settings()
     
     if settings.environment == "production":

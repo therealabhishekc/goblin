@@ -16,7 +16,7 @@ AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 # If no environment variable is set, fall back to config.py settings
 if not TABLE_NAME:
     try:
-        from app.config import get_settings
+        from app.core.config import get_settings
         settings = get_settings()
         TABLE_NAME = getattr(settings, "dynamodb_table_name", "whatsapp-dedup-dev")
     except Exception:
