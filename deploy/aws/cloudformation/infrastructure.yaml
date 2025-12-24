@@ -522,8 +522,8 @@ Resources:
                 - Name: ANALYTICS_DLQ_URL
                   Value: !Ref AnalyticsDLQ
       InstanceConfiguration:
-        Cpu: !If [IsProduction, '1 vCPU', '0.25 vCPU']
-        Memory: !If [IsProduction, '2 GB', '0.5 GB']
+        Cpu: !If [IsProduction, '2 vCPU', '1 vCPU']
+        Memory: !If [IsProduction, '4 GB', '2 GB']
         InstanceRoleArn: !GetAtt AppRunnerRole.Arn
       HealthCheckConfiguration:
         Protocol: HTTP
