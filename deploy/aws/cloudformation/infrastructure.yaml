@@ -490,7 +490,7 @@ Resources:
                 LOG_LEVEL: !If [IsProduction, 'INFO', 'INFO']
                 DATABASE_URL: !Sub 'postgresql://app_user@${PostgreSQLDB.Endpoint.Address}:${PostgreSQLDB.Endpoint.Port}/whatsapp_business_${Environment}?sslmode=require'
                 DB_HOST: !GetAtt PostgreSQLDB.Endpoint.Address
-                DB_PORT: !GetAtt PostgreSQLDB.Endpoint.Port
+                DB_PORT: !Sub '${PostgreSQLDB.Endpoint.Port}'
                 DB_NAME: !Sub 'whatsapp_business_${Environment}'
                 DB_USER: 'app_user'
                 USE_IAM_AUTH: 'true'
