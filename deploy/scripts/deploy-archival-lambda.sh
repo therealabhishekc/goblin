@@ -26,10 +26,24 @@ cp "$LAMBDA_DIR/requirements.txt" "$BUILD_DIR/"
 echo "Installing Python dependencies..."
 cd "$BUILD_DIR"
 
-# Install dependencies using Python 3.9 compatible binaries
-# Use pip with target for Python 3.9 and manylinux platform
-python3.9 -m pip install -r requirements.txt -t . --no-cache-dir 2>/dev/null || \
-  pip3 install -r requirements.txt -t . --python-version 39 --platform manylinux2014_x86_64 --implementation cp --only-binary=:all: --no-cache-dir
+# Use a clean approach: Install everything with the right platform
+# First remove psycopg2-binary from requirements temporarily and install others
+grep -v "psycopg2-binary" requirements.txt > requirements_temp.txt || true
+
+# Install non-psycopg2 dependencies normally
+if [ -s requirements_temp.txt ]; then
+  pip3 install -r requirements_temp.txt -t .
+fi
+
+# Install psycopg2-binary specifically for manylinux (Amazon Linux 2 compatible)
+pip3 install psycopg2-binary==2.9.10 -t . \
+  --platform manylinux2014_x86_64 \
+  --only-binary=:all: \
+  --python-version 39 \
+  --implementation cp \
+  --no-deps
+
+rm -f requirements_temp.txt
 
 # Create deployment package
 echo "Creating deployment package..."
