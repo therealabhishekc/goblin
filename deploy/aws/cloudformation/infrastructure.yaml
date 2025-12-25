@@ -303,6 +303,11 @@ Resources:
           ToPort: 5432
           CidrIp: !Ref AllowedCIDR
           Description: PostgreSQL access for App Runner service (restricted IP range)
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+          Description: PostgreSQL access for Lambda functions (IAM authenticated)
       Tags:
         - Key: Name
           Value: !Sub 'whatsapp-rds-sg-${Environment}'
@@ -714,8 +719,8 @@ Resources:
     Condition: EnableArchivalResources
     Properties:
       Name: !Sub '${Environment}-whatsapp-media-archival-schedule'
-      Description: 'Trigger media archival every 2 days at 3 AM UTC'
-      ScheduleExpression: 'cron(0 3 */2 * ? *)'
+      Description: 'Trigger media archival every 5 minutes'
+      ScheduleExpression: 'rate(5 minutes)'
       State: ENABLED
       Targets:
         - Arn: !GetAtt MediaArchivalFunction.Arn
@@ -725,7 +730,7 @@ Resources:
               "job_type": "media",
               "scheduled": true,
               "environment": "${Environment}",
-              "trigger_time": "scheduled_every_2_days"
+              "trigger_time": "scheduled_every_5_minuites"
             }
 
   # Lambda Permissions for EventBridge

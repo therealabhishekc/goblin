@@ -52,47 +52,108 @@ def lambda_handler(event, context):
 class MediaArchivalService:
     def __init__(self):
         self.s3_client = boto3.client('s3')
+        self.rds_client = boto3.client('rds')
+        self.secrets_client = boto3.client('secretsmanager')
         self.bucket_name = os.environ['S3_DATA_BUCKET']
         self.db_url = os.environ['DATABASE_URL']
         self.media_threshold_days = int(os.environ.get('MEDIA_THRESHOLD_DAYS', '0'))
         self.batch_size = int(os.environ.get('BATCH_SIZE', '50'))
+        self.secrets_name = os.environ.get('WHATSAPP_SECRETS_NAME')
+        self.whatsapp_token = None
         
         logger.info(f"Initialized with bucket: {self.bucket_name}, threshold: {self.media_threshold_days} days")
+        
+    def _get_iam_auth_token(self, hostname, port, username):
+        """Generate IAM authentication token for RDS"""
+        try:
+            token = self.rds_client.generate_db_auth_token(
+                DBHostname=hostname,
+                Port=port,
+                DBUsername=username,
+                Region=os.environ.get('AWS_REGION', 'us-east-1')
+            )
+            return token
+        except Exception as e:
+            logger.error(f"Failed to generate IAM auth token: {str(e)}")
+            raise
+    
+    def _get_whatsapp_token(self):
+        """Retrieve WhatsApp access token from Secrets Manager"""
+        if self.whatsapp_token:
+            return self.whatsapp_token
+            
+        try:
+            if not self.secrets_name:
+                logger.error("WHATSAPP_SECRETS_NAME environment variable not set")
+                return None
+                
+            response = self.secrets_client.get_secret_value(SecretId=self.secrets_name)
+            secrets = json.loads(response['SecretString'])
+            self.whatsapp_token = secrets.get('WHATSAPP_TOKEN') or secrets.get('whatsapp_token')
+            
+            if not self.whatsapp_token:
+                logger.error("WhatsApp token not found in secrets")
+                return None
+                
+            logger.info("Successfully retrieved WhatsApp access token")
+            return self.whatsapp_token
+            
+        except ClientError as e:
+            logger.error(f"Failed to retrieve WhatsApp token from Secrets Manager: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting WhatsApp token: {str(e)}")
+            return None
         
     def archive_old_media(self):
         """Archive old media files to S3"""
         # Parse database URL
         url = urlparse.urlparse(self.db_url)
         
-        # Connect to database
+        # Get IAM authentication token
+        db_host = url.hostname
+        db_port = url.port or 5432
+        db_user = url.username or 'app_user'
+        # Remove query string from path
+        db_path = url.path.split('?')[0] if url.path else ''
+        db_name = db_path[1:] if db_path else 'whatsapp_business_development'
+        
+        logger.info(f"Connecting to RDS at {db_host}:{db_port} as {db_user} using IAM authentication")
+        
+        # Generate IAM auth token
+        auth_token = self._get_iam_auth_token(db_host, db_port, db_user)
+        
+        # Connect to database with IAM authentication
         conn = psycopg2.connect(
-            database=url.path[1:],
-            user=url.username,
-            password=url.password,
-            host=url.hostname,
-            port=url.port or 5432,
+            database=db_name,
+            user=db_user,
+            password=auth_token,
+            host=db_host,
+            port=db_port,
+            sslmode='require',
             connect_timeout=30
         )
         
         try:
             cutoff_date = datetime.now() - timedelta(days=self.media_threshold_days)
             logger.info(f"Archiving media files older than {cutoff_date}")
+            logger.info(f"Query parameters: cutoff_date={cutoff_date}, batch_size={self.batch_size} (type: {type(self.batch_size)})")
             
             with conn.cursor(cursor_factory=RealDictCursor) as cursor:
                 # Get messages with media URLs that haven't been archived
-                query = """
+                query = f"""
                     SELECT id, message_id, media_url, message_type, timestamp, from_phone
                     FROM whatsapp_messages 
                     WHERE media_url IS NOT NULL 
                     AND timestamp < %s
-                    AND media_url NOT LIKE 's3://%'
+                    AND media_url NOT LIKE 's3://%%'
                     AND media_url != ''
-                    AND media_url NOT LIKE '%archived%'
+                    AND media_url NOT LIKE '%%archived%%'
                     ORDER BY timestamp
-                    LIMIT %s
+                    LIMIT {self.batch_size}
                 """
                 
-                cursor.execute(query, (cutoff_date, self.batch_size))
+                cursor.execute(query, (cutoff_date,))
                 media_messages = cursor.fetchall()
                 
                 if not media_messages:
@@ -139,8 +200,15 @@ class MediaArchivalService:
     def _archive_single_media(self, msg, cursor):
         """Archive a single media file"""
         try:
+            # Get WhatsApp access token
+            whatsapp_token = self._get_whatsapp_token()
+            if not whatsapp_token:
+                logger.warning(f"No WhatsApp token available for downloading media {msg['message_id']}")
+                return {'success': False, 'size': 0}
+            
             # Download media file with timeout and retry
             headers = {
+                'Authorization': f'Bearer {whatsapp_token}',
                 'User-Agent': 'WhatsApp-Archival-Bot/1.0'
             }
             
