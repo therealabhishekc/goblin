@@ -925,8 +925,9 @@ Resources:
     Type: AWS::Events::Rule
     Properties:
       Name: !Sub '${Environment}-daily-campaign-processing'
-      Description: 'Trigger daily marketing campaign processing at 9 AM UTC'
-      ScheduleExpression: 'cron(0 9 * * ? *)'  # 9 AM UTC daily (configurable)
+      Description: 'Trigger campaign processing every 5 minutes for testing'
+      ScheduleExpression: 'rate(5 minutes)'  # Every 5 minutes for testing
+      # For production use: 'cron(0 9 * * ? *)'  # 9 AM UTC daily
       State: ENABLED
       Targets:
         - Arn: !GetAtt CampaignProcessorFunction.Arn
@@ -935,7 +936,7 @@ Resources:
             {
               "scheduled": true,
               "environment": "${Environment}",
-              "trigger_time": "daily_9am_utc"
+              "trigger_time": "every_5_minutes_testing"
             }
   
   # Permission for EventBridge to invoke Campaign Processor Lambda
@@ -1104,5 +1105,5 @@ Outputs:
     Value: !Ref DailyCampaignScheduleRule
   
   CampaignProcessingTime:
-    Description: Daily campaign processing time (UTC)
-    Value: '09:00 UTC daily (4 AM EST / 1 AM PST)'
+    Description: Campaign processing schedule
+    Value: 'Every 5 minutes (for testing) - Change to cron(0 9 * * ? *) for production (9 AM UTC daily)'
