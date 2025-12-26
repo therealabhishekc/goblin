@@ -337,13 +337,13 @@ class MarketingCampaignService:
             repo = MarketingCampaignRepository(db)
             
             if status:
-                query = db.query(repo.model).filter(repo.model.status == status)
+                query = db.query(repo.model_class).filter(repo.model_class.status == status)
             else:
-                query = db.query(repo.model)
+                query = db.query(repo.model_class)
             
             campaigns = query.order_by(
-                repo.model.priority.asc(),
-                repo.model.created_at.desc()
+                repo.model_class.priority.asc(),
+                repo.model_class.created_at.desc()
             ).limit(limit).all()
             
             return [

@@ -20,7 +20,7 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
     """Repository for marketing campaigns"""
     
     def __init__(self, db: Session):
-        super().__init__(MarketingCampaignDB, db)
+        super().__init__(db, MarketingCampaignDB)
     
     def create_campaign(
         self,

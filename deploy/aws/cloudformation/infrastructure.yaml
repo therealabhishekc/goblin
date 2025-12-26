@@ -818,6 +818,160 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/${Environment}-whatsapp-media-archival'
       RetentionInDays: 14
 
+  # ================================
+  # MARKETING CAMPAIGN SCHEDULER
+  # ================================
+  
+  # Lambda Function for Campaign Processing
+  CampaignProcessorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${Environment}-campaign-processor'
+      Description: 'Invokes App Runner endpoint for daily campaign processing'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt CampaignProcessorRole.Arn
+      Timeout: 300  # 5 minutes
+      Environment:
+        Variables:
+          APP_RUNNER_URL: !GetAtt WhatsAppAppRunner.ServiceUrl
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import urllib3
+          import os
+          
+          http = urllib3.PoolManager()
+          
+          def lambda_handler(event, context):
+              """
+              Invoke App Runner endpoint for daily campaign processing
+              """
+              app_runner_url = os.environ.get('APP_RUNNER_URL')
+              endpoint = f"https://{app_runner_url}/api/marketing/process-daily"
+              
+              print(f"Invoking campaign processing: {endpoint}")
+              
+              try:
+                  response = http.request(
+                      'POST',
+                      endpoint,
+                      headers={
+                          'Content-Type': 'application/json',
+                      },
+                      timeout=290.0  # Slightly less than Lambda timeout
+                  )
+                  
+                  response_data = json.loads(response.data.decode('utf-8'))
+                  
+                  print(f"Response status: {response.status}")
+                  print(f"Response data: {response_data}")
+                  
+                  return {
+                      'statusCode': response.status,
+                      'body': json.dumps({
+                          'message': 'Campaign processing completed',
+                          'result': response_data
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"Error invoking campaign processor: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({
+                          'error': str(e)
+                      })
+                  }
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: whatsapp-business-api
+        - Key: Function
+          Value: campaign-processing
+  
+  # IAM Role for Campaign Processor Lambda
+  CampaignProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${Environment}-campaign-processor-role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AppRunnerInvokePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - apprunner:DescribeService
+                  - apprunner:ListServices
+                Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+  
+  # EventBridge Rule to trigger Lambda for campaign processing
+  DailyCampaignScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub '${Environment}-daily-campaign-processing'
+      Description: 'Trigger daily marketing campaign processing at 9 AM UTC'
+      ScheduleExpression: 'cron(0 9 * * ? *)'  # 9 AM UTC daily (configurable)
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CampaignProcessorFunction.Arn
+          Id: CampaignProcessorTarget
+          Input: !Sub |
+            {
+              "scheduled": true,
+              "environment": "${Environment}",
+              "trigger_time": "daily_9am_utc"
+            }
+  
+  # Permission for EventBridge to invoke Campaign Processor Lambda
+  CampaignProcessorInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CampaignProcessorFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt DailyCampaignScheduleRule.Arn
+  
+  # CloudWatch Alarm for Campaign Processing Errors
+  CampaignProcessorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub '${Environment}-campaign-processor-errors'
+      AlarmDescription: 'Alert when campaign processor Lambda function has errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CampaignProcessorFunction
+      TreatMissingData: notBreaching
+  
+  # CloudWatch Log Group for Campaign Processor
+  CampaignProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Environment}-campaign-processor'
+      RetentionInDays: 14
+
 # ================================
 # OUTPUTS
 # ================================
@@ -937,3 +1091,18 @@ Outputs:
       SQS Queues: ${IncomingMessageQueue}, ${OutgoingMessageQueue}, ${AnalyticsQueue}
       Archival: ${EnableArchival} (Messages: ${ArchiveThresholdDays}d, Media: ${MediaThresholdDays}d)
       Secrets: ${WhatsAppCredentialsSecret}
+  
+  # Campaign Processing Resources
+  CampaignProcessorFunctionArn:
+    Description: Campaign Processor Lambda Function ARN
+    Value: !GetAtt CampaignProcessorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CampaignProcessorArn'
+  
+  DailyCampaignSchedule:
+    Description: Daily campaign processing schedule (EventBridge Rule)
+    Value: !Ref DailyCampaignScheduleRule
+  
+  CampaignProcessingTime:
+    Description: Daily campaign processing time (UTC)
+    Value: '09:00 UTC daily (4 AM EST / 1 AM PST)'
