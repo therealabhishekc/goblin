@@ -849,7 +849,7 @@ Resources:
               Invoke App Runner endpoint for daily campaign processing
               """
               app_runner_url = os.environ.get('APP_RUNNER_URL')
-              endpoint = f"https://{app_runner_url}/api/marketing/process-daily"
+              endpoint = f"https://{app_runner_url}/marketing/process-daily"
               
               print(f"Invoking campaign processing: {endpoint}")
               
