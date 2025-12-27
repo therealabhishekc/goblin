@@ -182,6 +182,9 @@ class MarketingCampaignService:
                         logger.warning(f"⚠️ Skipping schedule for inactive campaign {schedule.campaign_id}")
                         continue
                     
+                    logger.info(f"🔍 Processing campaign: {campaign.name} (ID: {campaign.id})")
+                    logger.info(f"📊 Campaign stats: total={campaign.total_target_customers}, sent={campaign.messages_sent}, pending={campaign.messages_pending}")
+                    
                     # Get pending recipients for today
                     recipients = repo.get_pending_recipients(
                         campaign_id=schedule.campaign_id,
@@ -189,15 +192,21 @@ class MarketingCampaignService:
                         scheduled_date=date.today()
                     )
                     
-                    logger.info(f"📤 Processing {len(recipients)} recipients for campaign: {campaign.name}")
+                    logger.info(f"📤 Found {len(recipients)} pending recipients for campaign: {campaign.name}")
+                    if len(recipients) == 0:
+                        logger.warning(f"⚠️ No recipients found for today. Schedule: {schedule.send_date}, Batch size: {schedule.batch_size}")
                     
                     # Send messages
                     sent_count = 0
                     for recipient in recipients:
                         try:
+                            logger.info(f"🔄 Checking recipient: {recipient.phone_number}")
+                            
                             # Check subscription status before sending
                             user_repo = UserRepository(db)
                             is_subscribed = user_repo.is_user_subscribed(recipient.phone_number)
+                            
+                            logger.info(f"📋 Subscription status for {recipient.phone_number}: {is_subscribed}")
                             
                             if not is_subscribed:
                                 # Skip unsubscribed users
