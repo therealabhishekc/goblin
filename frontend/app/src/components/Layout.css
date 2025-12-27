@@ -1,0 +1,155 @@
+.layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 150vh;
+  position: relative;
+}
+
+/* Navbar */
+.navbar {
+  position: sticky;
+  top: 20px;
+  margin: 20px;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  z-index: 100;
+  background: transparent;
+  backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+}
+
+.navbar:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.navbar-brand h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.navbar-menu {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  flex: 1;
+  min-height: 60px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.navbar-menu::-webkit-scrollbar {
+  display: none;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 1.1rem;
+  border: none !important;
+  background: transparent !important;
+  backdrop-filter: none;
+}
+
+.nav-item:hover {
+  box-shadow: none !important;
+}
+
+.nav-item.active {
+  background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
+  border: none;
+  border-radius: var(--radius-lg);
+}
+
+.nav-icon {
+  font-size: 1.5rem;
+}
+
+.nav-label {
+  font-size: 1.1rem;
+}
+
+.navbar-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+/* Main Content */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Content Area */
+.content-area {
+  flex: 1;
+  padding: var(--spacing-lg);
+  margin: 0 20px 20px 20px;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Mobile Responsive */
+@media (max-width: 1024px) {
+  .navbar {
+    top: 10px;
+    margin: 10px;
+    gap: var(--spacing-md);
+  }
+
+  .nav-label {
+    display: none;
+  }
+
+  .nav-item {
+    padding: var(--spacing-sm);
+  }
+
+  .content-area {
+    margin: 0 10px 10px 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+
+  .navbar-brand h2 {
+    font-size: 1.25rem;
+  }
+
+  .navbar-menu {
+    order: 3;
+    width: 100%;
+    justify-content: space-around;
+    margin-top: var(--spacing-sm);
+    padding-top: var(--spacing-sm);
+    border-top: 1px solid var(--glass-border);
+  }
+
+  .navbar-actions {
+    margin-left: auto;
+  }
+
+  .navbar-actions button:first-child {
+    display: none;
+  }
+
+  .content-area {
+    padding: var(--spacing-md);
+  }
+}
