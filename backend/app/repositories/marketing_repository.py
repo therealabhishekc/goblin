@@ -226,9 +226,9 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
             logger.warning(f"⚠️ No pending recipients to schedule for campaign {campaign.name}")
             return 0
         
-        # Start date defaults to tomorrow
+        # Start date defaults to TODAY (not tomorrow) for immediate sending
         if not start_date:
-            start_date = date.today() + timedelta(days=1)
+            start_date = date.today()
         
         # Schedule recipients in batches
         daily_limit = campaign.daily_send_limit
