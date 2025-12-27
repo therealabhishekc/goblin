@@ -294,3 +294,61 @@ async def marketing_health():
                 "error": str(e)
             }
         )
+
+
+@router.post("/campaigns/{campaign_id}/reschedule-today")
+async def reschedule_campaign_to_today(campaign_id: str):
+    """
+    Reschedule all pending recipients of a campaign to TODAY
+    Useful for testing or urgent campaign launches
+    """
+    try:
+        from app.core.database import get_db_session
+        from app.repositories.marketing_repository import MarketingCampaignRepository
+        from app.models.marketing import RecipientStatus
+        import uuid
+        from datetime import date
+        
+        with get_db_session() as db:
+            repo = MarketingCampaignRepository(db)
+            campaign_uuid = uuid.UUID(campaign_id)
+            
+            # Get all pending recipients
+            from sqlalchemy import and_
+            from app.models.marketing import CampaignRecipientDB, CampaignSendScheduleDB
+            
+            recipients = db.query(CampaignRecipientDB).filter(
+                and_(
+                    CampaignRecipientDB.campaign_id == campaign_uuid,
+                    CampaignRecipientDB.status == RecipientStatus.PENDING.value
+                )
+            ).all()
+            
+            # Update their scheduled_send_date to today
+            count = 0
+            for recipient in recipients:
+                recipient.scheduled_send_date = date.today()
+                count += 1
+            
+            # Update schedule entries to today
+            schedules = db.query(CampaignSendScheduleDB).filter(
+                CampaignSendScheduleDB.campaign_id == campaign_uuid
+            ).all()
+            
+            for schedule in schedules:
+                schedule.send_date = date.today()
+            
+            db.commit()
+            
+            logger.info(f"✅ Rescheduled {count} recipients to today for campaign {campaign_id}")
+            
+            return JSONResponse({
+                "message": f"Rescheduled {count} recipients to today",
+                "campaign_id": campaign_id,
+                "new_date": date.today().isoformat(),
+                "recipients_updated": count
+            })
+            
+    except Exception as e:
+        logger.error(f"❌ Error rescheduling campaign: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
