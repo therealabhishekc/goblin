@@ -138,12 +138,15 @@ class OutgoingMessageProcessor:
                     with get_db_session() as db:
                         message_repo = MessageRepository(db)
                         
+                        # Extract content based on message type
+                        content = self._extract_message_content(whatsapp_message_data)
+                        
                         message_data = {
                             "message_id": wa_message_id,
                             "from_phone": metadata.get("business_phone", "business"),
                             "to_phone": phone_number,
                             "message_type": whatsapp_message_data.get("type", "text"),
-                            "content": whatsapp_message_data.get("content", ""),
+                            "content": content,
                             "media_url": whatsapp_message_data.get("media_url"),
                             "timestamp": datetime.utcnow(),
                             "status": "sent",
@@ -217,6 +220,80 @@ class OutgoingMessageProcessor:
                 60  # 1 minute
             )
 
+    def _extract_message_content(self, message_data: Dict[str, Any]) -> str:
+        """
+        Extract content from message data based on message type.
+        For template messages, creates a readable summary of the template.
+        """
+        message_type = message_data.get("type", "text")
+        
+        # For text messages, just return the content
+        if message_type == "text":
+            return message_data.get("content", message_data.get("text", ""))
+        
+        # For template messages, create a summary
+        if message_type == "template":
+            template_name = message_data.get("template_name", "Unknown Template")
+            language_code = message_data.get("language_code", "en_US")
+            
+            # Build content summary
+            content_parts = [f"Template: {template_name} ({language_code})"]
+            
+            # Extract parameters from components
+            components = message_data.get("components", [])
+            parameters = message_data.get("parameters", [])
+            
+            if components:
+                for component in components:
+                    comp_type = component.get("type", "unknown")
+                    comp_params = component.get("parameters", [])
+                    
+                    if comp_params:
+                        param_values = []
+                        for param in comp_params:
+                            if param.get("type") == "text":
+                                param_values.append(param.get("text", ""))
+                            elif param.get("type") == "image":
+                                param_values.append(f"[Image: {param.get('image', {}).get('link', 'N/A')}]")
+                            elif param.get("type") == "document":
+                                param_values.append(f"[Document: {param.get('document', {}).get('link', 'N/A')}]")
+                            elif param.get("type") == "video":
+                                param_values.append(f"[Video: {param.get('video', {}).get('link', 'N/A')}]")
+                        
+                        if param_values:
+                            content_parts.append(f"{comp_type.capitalize()}: {', '.join(param_values)}")
+            
+            elif parameters:
+                # Simple parameters (backward compatibility)
+                param_values = [p.get("text", "") for p in parameters if p.get("type") == "text"]
+                if param_values:
+                    content_parts.append(f"Body: {', '.join(param_values)}")
+            
+            return " | ".join(content_parts)
+        
+        # For media messages, return caption or media type
+        if message_type in ["image", "video", "document", "audio"]:
+            caption = message_data.get("content", message_data.get("caption", ""))
+            if caption:
+                return f"[{message_type.upper()}] {caption}"
+            return f"[{message_type.upper()}]"
+        
+        # For location messages
+        if message_type == "location":
+            name = message_data.get("name", "")
+            address = message_data.get("address", "")
+            lat = message_data.get("latitude", "")
+            lng = message_data.get("longitude", "")
+            if name and address:
+                return f"Location: {name}, {address}"
+            elif name:
+                return f"Location: {name}"
+            else:
+                return f"Location: {lat}, {lng}"
+        
+        # Default: return any content field or empty string
+        return message_data.get("content", "")
+    
     async def _visibility_heartbeat(self, receipt_handle: str, queue_type: QueueType, interval: int = 60, visibility_extension: int = 600):
         """Periodically extend SQS message visibility while processing."""
         try:

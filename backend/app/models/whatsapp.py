@@ -25,6 +25,7 @@ class MessageType(str, Enum):
     CONTACTS = "contacts"
     BUTTON = "button"
     INTERACTIVE = "interactive"
+    TEMPLATE = "template"
 
 class MessageStatus(str, Enum):
     RECEIVED = "received"
