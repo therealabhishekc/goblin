@@ -250,17 +250,18 @@ class MediaArchivalService:
                     }
                 )
                 
-                # Update database with S3 URL
+                # Update database with S3 URL and media size
                 s3_url = f"s3://{self.bucket_name}/{s3_key}"
+                media_size = len(media_data)
                 cursor.execute("""
                     UPDATE whatsapp_messages 
-                    SET media_url = %s, updated_at = CURRENT_TIMESTAMP 
+                    SET media_url = %s, media_size = %s, updated_at = CURRENT_TIMESTAMP 
                     WHERE id = %s
-                """, (s3_url, msg['id']))
+                """, (s3_url, media_size, msg['id']))
                 
-                logger.info(f"Archived media: {s3_key} ({len(media_data)} bytes)")
+                logger.info(f"Archived media: {s3_key} ({media_size} bytes)")
                 
-                return {'success': True, 'size': len(media_data)}
+                return {'success': True, 'size': media_size}
                 
             else:
                 logger.warning(f"Failed to download media for message {msg['message_id']}: HTTP {response.status_code}")

@@ -51,9 +51,24 @@ zip -r "$ZIP_FILE" . -x "*.pyc" -x "__pycache__/*" -x "*.dist-info/*"
 
 # Get current Lambda configuration
 echo "Updating Lambda function code..."
+
+# Set AWS CLI to use longer timeout
+export AWS_CLI_AUTO_PROMPT=off
+export AWS_MAX_ATTEMPTS=3
+export AWS_RETRY_MODE=adaptive
+
+# Upload via S3 for larger packages (more reliable)
+S3_BUCKET="whatsapp-data-development-205924461245"
+S3_KEY="lambda-deployments/$ZIP_FILE"
+
+echo "Uploading to S3..."
+aws s3 cp "$ZIP_FILE" "s3://$S3_BUCKET/$S3_KEY"
+
+echo "Updating Lambda function from S3..."
 aws lambda update-function-code \
     --function-name "$FUNCTION_NAME" \
-    --zip-file "fileb://$ZIP_FILE" \
+    --s3-bucket "$S3_BUCKET" \
+    --s3-key "$S3_KEY" \
     --no-cli-pager
 
 echo "Waiting for Lambda update to complete..."
