@@ -175,13 +175,17 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         whatsapp_message_id: Optional[str] = None,
         failure_reason: Optional[str] = None
     ) -> Optional[CampaignRecipientDB]:
-        """Update recipient send status"""
+        """Update recipient send status and campaign counters"""
         recipient = self.db.query(CampaignRecipientDB).filter(
             CampaignRecipientDB.id == recipient_id
         ).first()
         
         if recipient:
+            old_status = recipient.status
             recipient.status = status.value
+            
+            # Get campaign for updating counters
+            campaign = self.get_campaign(recipient.campaign_id)
             
             if status == RecipientStatus.QUEUED:
                 # Message queued for sending
@@ -190,11 +194,26 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
                 recipient.sent_at = datetime.utcnow()
                 if whatsapp_message_id:
                     recipient.whatsapp_message_id = whatsapp_message_id
+                # Update campaign counter only if status changed
+                if campaign and old_status != RecipientStatus.SENT.value:
+                    campaign.messages_sent += 1
+                    if old_status == RecipientStatus.PENDING.value:
+                        campaign.messages_pending -= 1
             elif status == RecipientStatus.DELIVERED:
                 recipient.delivered_at = datetime.utcnow()
                 # If sent_at not set, set it now
                 if not recipient.sent_at:
                     recipient.sent_at = datetime.utcnow()
+                # Update campaign counter only if status changed
+                if campaign and old_status != RecipientStatus.DELIVERED.value:
+                    campaign.messages_delivered += 1
+                    # If jumping from pending/sent to delivered
+                    if old_status == RecipientStatus.PENDING.value:
+                        campaign.messages_pending -= 1
+                        campaign.messages_sent += 1
+                    elif old_status == RecipientStatus.SENT.value:
+                        # Already counted in sent, just increment delivered
+                        pass
             elif status == RecipientStatus.READ:
                 recipient.read_at = datetime.utcnow()
                 # If delivered_at not set, set it now
@@ -203,17 +222,39 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
                 # If sent_at not set, set it now
                 if not recipient.sent_at:
                     recipient.sent_at = datetime.utcnow()
+                # Update campaign counter only if status changed
+                if campaign and old_status != RecipientStatus.READ.value:
+                    campaign.messages_read += 1
+                    # If jumping from pending/sent/delivered to read
+                    if old_status == RecipientStatus.PENDING.value:
+                        campaign.messages_pending -= 1
+                        campaign.messages_sent += 1
+                        campaign.messages_delivered += 1
+                    elif old_status == RecipientStatus.SENT.value:
+                        campaign.messages_delivered += 1
+                    elif old_status == RecipientStatus.DELIVERED.value:
+                        # Already counted in delivered, just increment read
+                        pass
             elif status == RecipientStatus.FAILED:
                 recipient.failed_at = datetime.utcnow()
                 recipient.failure_reason = failure_reason
                 recipient.retry_count += 1
+                # Update campaign counter only if status changed
+                if campaign and old_status != RecipientStatus.FAILED.value:
+                    campaign.messages_failed += 1
+                    if old_status == RecipientStatus.PENDING.value:
+                        campaign.messages_pending -= 1
             elif status == RecipientStatus.SKIPPED:
                 # User was skipped (e.g., unsubscribed)
                 if failure_reason:
                     recipient.failure_reason = failure_reason
+                # Update campaign counter
+                if campaign and old_status == RecipientStatus.PENDING.value:
+                    campaign.messages_pending -= 1
             
             self.db.commit()
             self.db.refresh(recipient)
+            logger.info(f"📊 Updated recipient {recipient.phone_number}: {old_status} -> {status.value}")
         return recipient
     
     def schedule_campaign_sends(
