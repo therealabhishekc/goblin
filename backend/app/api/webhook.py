@@ -391,13 +391,26 @@ async def process_status_update(
             ).first()
             
             if whatsapp_message:
-                # Update status - valid statuses: sent, delivered, read, failed
-                valid_statuses = ["sent", "delivered", "read", "failed"]
-                if status in valid_statuses:
+                # Define status hierarchy: sent < delivered < read
+                status_hierarchy = {
+                    "sent": 1,
+                    "delivered": 2,
+                    "read": 3,
+                    "failed": 99  # Failed is always updated
+                }
+                
+                current_status = whatsapp_message.status or "sent"
+                current_level = status_hierarchy.get(current_status, 0)
+                new_level = status_hierarchy.get(status, 0)
+                
+                # Only update if new status is higher in hierarchy or is "failed"
+                if new_level >= current_level:
                     whatsapp_message.status = status
                     db.commit()
                     message_updated = True
                     logger.info(f"✅ Updated whatsapp_messages status: {message_id} -> {status}")
+                else:
+                    logger.info(f"⏭️  Skipped whatsapp_messages status downgrade: {message_id} ({current_status} -> {status})")
             
             # Return appropriate response
             if campaign_updated or message_updated:

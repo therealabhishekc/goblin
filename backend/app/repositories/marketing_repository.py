@@ -182,6 +182,28 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         
         if recipient:
             old_status = recipient.status
+            
+            # Define status hierarchy to prevent downgrades
+            # pending < queued < sent < delivered < read
+            # failed and skipped are terminal states but can be set anytime
+            status_hierarchy = {
+                "pending": 1,
+                "queued": 2,
+                "sent": 3,
+                "delivered": 4,
+                "read": 5,
+                "failed": 99,  # Can always set to failed
+                "skipped": 99  # Can always set to skipped
+            }
+            
+            current_level = status_hierarchy.get(old_status, 0)
+            new_level = status_hierarchy.get(status.value, 0)
+            
+            # Only update if new status is higher in hierarchy or is terminal (failed/skipped)
+            if new_level < current_level and new_level < 99:
+                logger.info(f"⏭️  Skipped recipient status downgrade: {recipient.phone_number} ({old_status} -> {status.value})")
+                return recipient
+            
             recipient.status = status.value
             
             # Get campaign for updating counters
