@@ -332,7 +332,7 @@ async def process_status_update(
 ) -> Dict[str, Any]:
     """
     Process WhatsApp status updates (sent, delivered, read, failed)
-    Updates campaign_recipients table if the message is from a marketing campaign
+    Updates both campaign_recipients and whatsapp_messages tables
     """
     message_id = status_update.get("id")
     status = status_update.get("status")
@@ -348,13 +348,17 @@ async def process_status_update(
     try:
         logger.info(f"📊 Status update: {message_id} -> {status}")
         
-        # Update campaign_recipients if this is a campaign message
+        # Update both campaign_recipients and whatsapp_messages tables
         from app.core.database import get_db_session
         from app.repositories.marketing_repository import MarketingCampaignRepository
         from app.models.marketing import CampaignRecipientDB, RecipientStatus
+        from app.database.models import WhatsAppMessage
+        
+        campaign_updated = False
+        message_updated = False
         
         with get_db_session() as db:
-            # Find recipient by whatsapp_message_id
+            # 1. Update campaign_recipients if this is a campaign message
             recipient = db.query(CampaignRecipientDB).filter(
                 CampaignRecipientDB.whatsapp_message_id == message_id
             ).first()
@@ -378,20 +382,38 @@ async def process_status_update(
                         recipient_status,
                         whatsapp_message_id=message_id
                     )
+                    campaign_updated = True
                     logger.info(f"✅ Updated campaign recipient status: {recipient.phone_number} -> {status}")
-                    
-                    return {
-                        "message_id": message_id,
-                        "phone_number": recipient.phone_number,
-                        "status": "updated",
-                        "new_status": status
-                    }
+            
+            # 2. Update whatsapp_messages table status
+            whatsapp_message = db.query(WhatsAppMessage).filter(
+                WhatsAppMessage.message_id == message_id
+            ).first()
+            
+            if whatsapp_message:
+                # Update status - valid statuses: sent, delivered, read, failed
+                valid_statuses = ["sent", "delivered", "read", "failed"]
+                if status in valid_statuses:
+                    whatsapp_message.status = status
+                    db.commit()
+                    message_updated = True
+                    logger.info(f"✅ Updated whatsapp_messages status: {message_id} -> {status}")
+            
+            # Return appropriate response
+            if campaign_updated or message_updated:
+                return {
+                    "message_id": message_id,
+                    "status": "updated",
+                    "new_status": status,
+                    "campaign_updated": campaign_updated,
+                    "message_updated": message_updated
+                }
         
-        # Not a campaign message, just log it
-        logger.debug(f"📊 Status update for non-campaign message: {message_id}")
+        # Neither table was updated
+        logger.debug(f"📊 Status update for message not found in DB: {message_id}")
         return {
             "message_id": message_id,
-            "status": "logged",
+            "status": "not_found",
             "whatsapp_status": status
         }
         
