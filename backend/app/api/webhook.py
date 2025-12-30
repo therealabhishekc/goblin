@@ -131,10 +131,22 @@ async def process_webhook(
             for change in entry.get("changes", []):
                 if change.get("field") != "messages":
                     continue
-                    
-                messages = change.get("value", {}).get("messages", [])
-                contacts = change.get("value", {}).get("contacts", [])
-                metadata = change.get("value", {}).get("metadata", {})
+                
+                value = change.get("value", {})
+                messages = value.get("messages", [])
+                contacts = value.get("contacts", [])
+                metadata = value.get("metadata", {})
+                statuses = value.get("statuses", [])
+                
+                # Process status updates (delivered, read, etc.)
+                for status_update in statuses:
+                    result = await process_status_update(
+                        status_update=status_update,
+                        webhook_id=webhook_id
+                    )
+                    processing_results.append(result)
+                    if result["status"] == "updated":
+                        stats["new"] += 1
                 
                 # Process each message with atomic deduplication
                 for i, message in enumerate(messages):
@@ -310,6 +322,84 @@ async def process_single_message_safe(
             "message_type": message_type,
             "status": "processing_error",
             "category": "errors",
+            "error": str(e)
+        }
+
+
+async def process_status_update(
+    status_update: Dict[str, Any],
+    webhook_id: str
+) -> Dict[str, Any]:
+    """
+    Process WhatsApp status updates (sent, delivered, read, failed)
+    Updates campaign_recipients table if the message is from a marketing campaign
+    """
+    message_id = status_update.get("id")
+    status = status_update.get("status")
+    recipient_id = status_update.get("recipient_id")
+    
+    if not message_id or not status:
+        return {
+            "message_id": message_id,
+            "status": "skipped",
+            "reason": "Missing required fields"
+        }
+    
+    try:
+        logger.info(f"📊 Status update: {message_id} -> {status}")
+        
+        # Update campaign_recipients if this is a campaign message
+        from app.core.database import get_db_session
+        from app.repositories.marketing_repository import MarketingCampaignRepository
+        from app.models.marketing import CampaignRecipientDB, RecipientStatus
+        
+        with get_db_session() as db:
+            # Find recipient by whatsapp_message_id
+            recipient = db.query(CampaignRecipientDB).filter(
+                CampaignRecipientDB.whatsapp_message_id == message_id
+            ).first()
+            
+            if recipient:
+                repo = MarketingCampaignRepository(db)
+                
+                # Map WhatsApp status to our RecipientStatus
+                status_mapping = {
+                    "sent": RecipientStatus.SENT,
+                    "delivered": RecipientStatus.DELIVERED,
+                    "read": RecipientStatus.READ,
+                    "failed": RecipientStatus.FAILED
+                }
+                
+                recipient_status = status_mapping.get(status)
+                
+                if recipient_status:
+                    repo.update_recipient_status(
+                        recipient.id,
+                        recipient_status,
+                        whatsapp_message_id=message_id
+                    )
+                    logger.info(f"✅ Updated campaign recipient status: {recipient.phone_number} -> {status}")
+                    
+                    return {
+                        "message_id": message_id,
+                        "phone_number": recipient.phone_number,
+                        "status": "updated",
+                        "new_status": status
+                    }
+        
+        # Not a campaign message, just log it
+        logger.debug(f"📊 Status update for non-campaign message: {message_id}")
+        return {
+            "message_id": message_id,
+            "status": "logged",
+            "whatsapp_status": status
+        }
+        
+    except Exception as e:
+        logger.error(f"❌ Error processing status update: {e}")
+        return {
+            "message_id": message_id,
+            "status": "error",
             "error": str(e)
         }
 

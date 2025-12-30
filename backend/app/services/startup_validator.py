@@ -82,7 +82,7 @@ class StartupValidator:
                 db.execute(text("SELECT 1"))
                 
                 # Test tables exist (basic schema check)
-                core_tables = ['user_profiles', 'whatsapp_messages', 'business_metrics', 'message_templates']
+                core_tables = ['user_profiles', 'whatsapp_messages', 'business_metrics']
                 marketing_tables = ['marketing_campaigns', 'campaign_recipients', 'campaign_send_schedule', 'campaign_analytics']
                 
                 try:

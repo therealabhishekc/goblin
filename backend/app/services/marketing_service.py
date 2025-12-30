@@ -242,14 +242,14 @@ class MarketingCampaignService:
                             )
                             
                             if message_id:
-                                # Update recipient status
+                                # Update recipient status to SENT (not QUEUED) since we successfully sent it
                                 repo.update_recipient_status(
                                     recipient.id,
-                                    RecipientStatus.QUEUED,
+                                    RecipientStatus.SENT,
                                     whatsapp_message_id=message_id
                                 )
                                 sent_count += 1
-                                logger.debug(f"✅ Queued message for {recipient.phone_number}: {message_id}")
+                                logger.info(f"✅ Sent message to {recipient.phone_number}: {message_id}")
                             
                         except Exception as e:
                             logger.error(f"❌ Failed to send to {recipient.phone_number}: {e}")

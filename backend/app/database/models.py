@@ -12,7 +12,7 @@ import uuid
 # Use the newer model files instead:
 # - app/models/user.py (UserProfileDB)
 # - app/models/whatsapp.py (WhatsAppMessageDB)
-# - app/models/business.py (BusinessMetricsDB, MessageTemplateDB)
+# - app/models/business.py (BusinessMetricsDB)
 
 from app.core.database import Base
 
@@ -93,23 +93,4 @@ class BusinessMetrics(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-class MessageTemplate(Base):
-    """Template messages for automated responses"""
-    __tablename__ = "message_templates"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(100), nullable=False, unique=True)
-    category = Column(String(50), nullable=False)  # greeting, support, marketing
-    
-    # Template content
-    template_text = Column(Text, nullable=False)
-    variables = Column(ARRAY(String), default=[])  # Variables like {name}, {business}
-    
-    # Usage tracking
-    usage_count = Column(Integer, default=0)
-    last_used = Column(DateTime)
-    is_active = Column(Boolean, default=True)
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+

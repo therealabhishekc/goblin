@@ -1,68 +1,6 @@
 -- =============================================================================
 -- COMPLETE DATABASE SCHEMA MIGRATION
--- ==========================CREATE INDEX IF NOT EALTER COLUMN status SET D'Message status: prEND $$'Message status: END $$;
-
 -- =============================================================================
--- SECTION 5: VERIFICATION QUERIES
--- =============================================================================ssing (being processed), processed (completed successfully), failed (processing failed),     FOR EACH ROW EEND $$;
-
--- =============================================================================
--- SECTION 8: HELPFUL VIEWS FOR MARKETING CAMPAIGNS
--- =============================================================================E FUNCTION update_updated_at_column();
-
--- =============================================================================
--- SECTION 7: GRANT PERMISSIONS FOR MARKETING TABLES
--- =============================================================================(outgoing message sent), delivered (message delivered to customer), read (message read by recipient)';
-
--- =============================================================================
--- SECTION 4: GRANT PERMISSIONS TO APP USER
--- ============================================================================= =============================================================================
--- SECTION 6: VERIFICATION QUERIES
--- =============================================================================ing (being processed), processed (completed successfully), failed (processing failed), se    FOR EACH ROW EEND $$;
-
--- =======================================================END $$;
-
--- =============================================================================
--- SECTION 9: FINAL VERIFICATION QUERIES
--- ==============================================================================================
--- SECTION 9: HELPFUL VIEWS FOR MARKETING CAMPAIGNS
--- =============================================================================E FUNCTION update_updated_at_column();
-
--- =============================================================================
--- SECTION 8: GRANT PERMISSIONS FOR MARKETING TABLES
--- =============================================================================utgoing message sent), delivered (message delivered to customer), read (message read by recipient)';
-
--- =============================================================================
--- SECTION 5: GRANT PERMISSIONS TO APP USER
--- =============================================================================T 'processing';
-
--- =============================================================================
--- SECTION 4: ADD COMMENTS AND DOCUMENTATION
--- ============================================================================= idx_message_templates_active ON message_templates(is_active);
-
--- =============================================================================
--- SECTION 3: UPDATE STATUS VALUES (update_status_values.sql)
--- =============================================================================================CREATE INDEX IF NOT EALTER COLUMN status SET D'Message status: prEND $$;
-
--- ================================GROUP BY direction;
-
--- =============================================================================
--- SECTION 6: MARKETING CAMPAIGNS TABLES
--- =====================================================================================================================
--- SECTION 7: VERIFICATION QUERIES
--- =============================================================================ing (being processed), processed (completed successfully), failed (processing failed), sent (outgoing message sent), delivered (message delivered to customer), read (message read by recipient)';
-
--- =============================================================================
--- SECTION 6: GRANT PERMISSIONS TO APP USER
--- =============================================================================T 'processing';
-
--- =============================================================================
--- SECTION 5: ADD COMMENTS AND DOCUMENTATION
--- ============================================================================= idx_message_templates_active ON message_templates(is_active);
-
--- =============================================================================
--- SECTION 4: UPDATE STATUS VALUES (update_status_values.sql)
--- ======================================================================================================
 -- This file combines all migrations into one comprehensive schema setup
 -- Run this to create/update all tables and columns from scratch
 -- Date: 2025-10-03
@@ -132,19 +70,6 @@ CREATE INDEX IF NOT EXISTS idx_messages_timestamp ON whatsapp_messages(timestamp
 CREATE INDEX IF NOT EXISTS idx_messages_status ON whatsapp_messages(status);
 CREATE INDEX IF NOT EXISTS idx_messages_direction ON whatsapp_messages(direction);
 
--- Create message_queue table (for SQS tracking)
-CREATE TABLE IF NOT EXISTS message_queue (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    message_id VARCHAR(100) NOT NULL,
-    queue_name VARCHAR(50) NOT NULL,
-    status VARCHAR(20) DEFAULT 'queued',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    processed_at TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_queue_message_id ON message_queue(message_id);
-CREATE INDEX IF NOT EXISTS idx_queue_status ON message_queue(status);
-
 -- =============================================================================
 -- SECTION 2: ADD BUSINESS METRICS TABLE (add_business_metrics_table.sql)
 -- =============================================================================
@@ -173,31 +98,6 @@ CREATE TABLE IF NOT EXISTS business_metrics (
 -- Create index on date for fast lookups
 CREATE INDEX IF NOT EXISTS idx_business_metrics_date ON business_metrics(date);
 
--- Create message_templates table
-CREATE TABLE IF NOT EXISTS message_templates (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name VARCHAR(100) NOT NULL UNIQUE,
-    category VARCHAR(50) NOT NULL,
-    
-    -- Template content
-    template_text VARCHAR(1000) NOT NULL,
-    variables JSONB DEFAULT '[]',
-    
-    -- Usage tracking
-    usage_count INTEGER DEFAULT 0,
-    last_used TIMESTAMP,
-    is_active BOOLEAN DEFAULT true,
-    
-    -- Timestamps
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create indexes on message_templates
-CREATE INDEX IF NOT EXISTS idx_message_templates_name ON message_templates(name);
-CREATE INDEX IF NOT EXISTS idx_message_templates_category ON message_templates(category);
-CREATE INDEX IF NOT EXISTS idx_message_templates_active ON message_templates(is_active);
-
 -- =============================================================================
 -- SECTION 3: ADD COMMENTS AND DOCUMENTATION
 -- =============================================================================
@@ -205,7 +105,6 @@ CREATE INDEX IF NOT EXISTS idx_message_templates_active ON message_templates(is_
 COMMENT ON TABLE user_profiles IS 'Customer profile information for WhatsApp users';
 COMMENT ON TABLE whatsapp_messages IS 'WhatsApp message history (incoming and outgoing)';
 COMMENT ON TABLE business_metrics IS 'Daily business metrics and analytics';
-COMMENT ON TABLE message_templates IS 'Reusable message templates for customer communication';
 
 COMMENT ON COLUMN user_profiles.subscription IS 
 'User subscription status for template messages: subscribed (can receive templates), unsubscribed (opted out via STOP command). Does NOT affect automated replies to customer messages.';
@@ -251,9 +150,7 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
         GRANT ALL PRIVILEGES ON user_profiles TO app_user;
         GRANT ALL PRIVILEGES ON whatsapp_messages TO app_user;
-        GRANT ALL PRIVILEGES ON message_queue TO app_user;
         GRANT ALL PRIVILEGES ON business_metrics TO app_user;
-        GRANT ALL PRIVILEGES ON message_templates TO app_user;
     END IF;
 END $$;
 
@@ -275,11 +172,7 @@ SELECT 'user_profiles' as table_name, COUNT(*) as row_count FROM user_profiles
 UNION ALL
 SELECT 'whatsapp_messages' as table_name, COUNT(*) as row_count FROM whatsapp_messages
 UNION ALL
-SELECT 'message_queue' as table_name, COUNT(*) as row_count FROM message_queue
-UNION ALL
-SELECT 'business_metrics' as table_name, COUNT(*) as row_count FROM business_metrics
-UNION ALL
-SELECT 'message_templates' as table_name, COUNT(*) as row_count FROM message_templates;
+SELECT 'business_metrics' as table_name, COUNT(*) as row_count FROM business_metrics;
 
 -- Show subscription distribution
 SELECT 
@@ -642,11 +535,7 @@ SELECT 'user_profiles' as table_name, COUNT(*) as row_count FROM user_profiles
 UNION ALL
 SELECT 'whatsapp_messages' as table_name, COUNT(*) as row_count FROM whatsapp_messages
 UNION ALL
-SELECT 'message_queue' as table_name, COUNT(*) as row_count FROM message_queue
-UNION ALL
 SELECT 'business_metrics' as table_name, COUNT(*) as row_count FROM business_metrics
-UNION ALL
-SELECT 'message_templates' as table_name, COUNT(*) as row_count FROM message_templates
 UNION ALL
 SELECT 'marketing_campaigns' as table_name, COUNT(*) as row_count FROM marketing_campaigns
 UNION ALL
@@ -662,13 +551,11 @@ SELECT 'campaign_analytics' as table_name, COUNT(*) as row_count FROM campaign_a
 -- All tables, columns, indexes, constraints, functions, triggers, and views
 -- have been created/updated.
 -- 
--- Total Tables: 9
---   Core Tables (5):
+-- Total Tables: 8
+--   Core Tables (3):
 --     - user_profiles
 --     - whatsapp_messages
---     - message_queue
 --     - business_metrics
---     - message_templates
 --   Marketing Campaign Tables (4):
 --     - marketing_campaigns
 --     - campaign_recipients

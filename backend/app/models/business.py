@@ -37,14 +37,6 @@ class MetricsSummary(BaseModel):
     average_response_time_seconds: float
     total_days_tracked: int
 
-class MessageTemplate(BaseModel):
-    """Message template model"""
-    name: str = Field(..., description="Template name")
-    category: str = Field(..., description="Template category")
-    template_text: str = Field(..., description="Template text content")
-    variables: List[str] = Field(default=[], description="Template variables")
-    is_active: bool = Field(True, description="Is template active")
-
 # SQLAlchemy Database Models
 class BusinessMetricsDB(Base):
     """Business metrics database table"""
@@ -63,27 +55,6 @@ class BusinessMetricsDB(Base):
     
     # Content tracking
     popular_keywords = Column(JSON, default={})
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class MessageTemplateDB(Base):
-    """Message template database table"""
-    __tablename__ = "message_templates"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(100), nullable=False, unique=True)
-    category = Column(String(50), nullable=False)
-    
-    # Template content
-    template_text = Column(String(1000), nullable=False)
-    variables = Column(JSON, default=[])
-    
-    # Usage tracking
-    usage_count = Column(Integer, default=0)
-    last_used = Column(DateTime)
-    is_active = Column(Boolean, default=True)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

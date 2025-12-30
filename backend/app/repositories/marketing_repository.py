@@ -183,17 +183,34 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         if recipient:
             recipient.status = status.value
             
-            if status == RecipientStatus.SENT:
-                recipient.sent_at = datetime.utcnow()
+            if status == RecipientStatus.QUEUED:
+                # Message queued for sending
                 recipient.whatsapp_message_id = whatsapp_message_id
+            elif status == RecipientStatus.SENT:
+                recipient.sent_at = datetime.utcnow()
+                if whatsapp_message_id:
+                    recipient.whatsapp_message_id = whatsapp_message_id
             elif status == RecipientStatus.DELIVERED:
                 recipient.delivered_at = datetime.utcnow()
+                # If sent_at not set, set it now
+                if not recipient.sent_at:
+                    recipient.sent_at = datetime.utcnow()
             elif status == RecipientStatus.READ:
                 recipient.read_at = datetime.utcnow()
+                # If delivered_at not set, set it now
+                if not recipient.delivered_at:
+                    recipient.delivered_at = datetime.utcnow()
+                # If sent_at not set, set it now
+                if not recipient.sent_at:
+                    recipient.sent_at = datetime.utcnow()
             elif status == RecipientStatus.FAILED:
                 recipient.failed_at = datetime.utcnow()
                 recipient.failure_reason = failure_reason
                 recipient.retry_count += 1
+            elif status == RecipientStatus.SKIPPED:
+                # User was skipped (e.g., unsubscribed)
+                if failure_reason:
+                    recipient.failure_reason = failure_reason
             
             self.db.commit()
             self.db.refresh(recipient)
