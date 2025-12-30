@@ -230,7 +230,7 @@ class MarketingCampaignService:
                                 message_data["components"] = campaign.template_components
                             
                             # Send via SQS
-                            message_id = await send_outgoing_message(
+                            sqs_message_id = await send_outgoing_message(
                                 phone_number=recipient.phone_number,
                                 message_data=message_data,
                                 metadata={
@@ -241,15 +241,14 @@ class MarketingCampaignService:
                                 }
                             )
                             
-                            if message_id:
-                                # Update recipient status to SENT (not QUEUED) since we successfully sent it
+                            if sqs_message_id:
+                                # Update recipient status to QUEUED (will be updated to SENT with WhatsApp message ID by outgoing processor)
                                 repo.update_recipient_status(
                                     recipient.id,
-                                    RecipientStatus.SENT,
-                                    whatsapp_message_id=message_id
+                                    RecipientStatus.QUEUED
                                 )
                                 sent_count += 1
-                                logger.info(f"✅ Sent message to {recipient.phone_number}: {message_id}")
+                                logger.info(f"✅ Queued message for {recipient.phone_number} (SQS: {sqs_message_id})")
                             
                         except Exception as e:
                             logger.error(f"❌ Failed to send to {recipient.phone_number}: {e}")

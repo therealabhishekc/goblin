@@ -157,6 +157,27 @@ class OutgoingMessageProcessor:
                         db.commit()
                         
                         logger.info(f"📝 Outgoing message stored in database: {wa_message_id}")
+                        
+                        # Update campaign recipient if this is a campaign message
+                        if metadata.get("source") == "marketing_campaign" and metadata.get("recipient_id"):
+                            try:
+                                from app.repositories.marketing_repository import MarketingCampaignRepository
+                                from app.models.marketing import RecipientStatus
+                                import uuid as uuid_lib
+                                
+                                campaign_repo = MarketingCampaignRepository(db)
+                                recipient_id = uuid_lib.UUID(metadata["recipient_id"])
+                                
+                                # Update with the real WhatsApp message ID
+                                campaign_repo.update_recipient_status(
+                                    recipient_id,
+                                    RecipientStatus.SENT,
+                                    whatsapp_message_id=wa_message_id
+                                )
+                                
+                                logger.info(f"✅ Updated campaign recipient with WhatsApp message ID: {wa_message_id}")
+                            except Exception as campaign_error:
+                                logger.error(f"❌ Failed to update campaign recipient: {campaign_error}")
                     
                 except Exception as db_error:
                     logger.error(f"❌ Failed to store outgoing message in database: {db_error}")
