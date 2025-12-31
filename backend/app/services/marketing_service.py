@@ -8,7 +8,7 @@ import uuid
 
 from app.repositories.marketing_repository import MarketingCampaignRepository
 from app.repositories.user_repository import UserRepository
-from app.models.marketing import CampaignStatus, RecipientStatus
+from app.models.marketing import CampaignStatus, RecipientStatus, ScheduleStatus
 from app.services.sqs_service import send_outgoing_message
 from app.core.logging import logger
 from app.core.database import get_db_session
@@ -176,10 +176,14 @@ class MarketingCampaignService:
             
             for schedule in schedules:
                 try:
+                    # Update schedule status to PROCESSING
+                    repo.update_schedule_status(schedule.id, ScheduleStatus.PROCESSING)
+                    
                     # Get campaign
                     campaign = repo.get_campaign(schedule.campaign_id)
                     if not campaign or campaign.status != CampaignStatus.ACTIVE.value:
                         logger.warning(f"⚠️ Skipping schedule for inactive campaign {schedule.campaign_id}")
+                        repo.update_schedule_status(schedule.id, ScheduleStatus.FAILED)
                         continue
                     
                     logger.info(f"🔍 Processing campaign: {campaign.name} (ID: {campaign.id})")
@@ -195,6 +199,9 @@ class MarketingCampaignService:
                     logger.info(f"📤 Found {len(recipients)} pending recipients for campaign: {campaign.name}")
                     if len(recipients) == 0:
                         logger.warning(f"⚠️ No recipients found for today. Schedule: {schedule.send_date}, Batch size: {schedule.batch_size}")
+                        # Mark schedule as completed if no recipients
+                        repo.update_schedule_status(schedule.id, ScheduleStatus.COMPLETED, messages_sent=0)
+                        continue
                     
                     # Send messages
                     sent_count = 0
@@ -263,11 +270,19 @@ class MarketingCampaignService:
                     
                     logger.info(f"✅ Campaign {campaign.name}: Sent {sent_count}/{len(recipients)} messages")
                     
+                    # Update schedule with sent count and mark as completed
+                    repo.update_schedule_status(schedule.id, ScheduleStatus.COMPLETED, messages_sent=sent_count)
+                    
                     # Record analytics
                     repo.record_analytics(schedule.campaign_id, date.today())
                     
                 except Exception as e:
                     logger.error(f"❌ Error processing schedule {schedule.id}: {e}")
+                    # Mark schedule as failed
+                    try:
+                        repo.update_schedule_status(schedule.id, ScheduleStatus.FAILED)
+                    except Exception as update_error:
+                        logger.error(f"❌ Failed to update schedule status: {update_error}")
             
             return {
                 "date": date.today().isoformat(),

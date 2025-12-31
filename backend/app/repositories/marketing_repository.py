@@ -351,6 +351,40 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
             )
         ).order_by(CampaignSendScheduleDB.created_at.asc()).all()
     
+    def update_schedule_status(
+        self,
+        schedule_id: uuid.UUID,
+        status: ScheduleStatus,
+        messages_sent: Optional[int] = None
+    ) -> Optional[CampaignSendScheduleDB]:
+        """Update schedule status and progress"""
+        schedule = self.db.query(CampaignSendScheduleDB).filter(
+            CampaignSendScheduleDB.id == schedule_id
+        ).first()
+        
+        if schedule:
+            schedule.status = status.value
+            
+            # Update messages_sent if provided
+            if messages_sent is not None:
+                schedule.messages_sent = messages_sent
+                schedule.messages_remaining = schedule.batch_size - messages_sent
+            
+            # Update timestamps based on status
+            if status == ScheduleStatus.PROCESSING and not schedule.started_at:
+                schedule.started_at = datetime.utcnow()
+            elif status == ScheduleStatus.COMPLETED:
+                schedule.completed_at = datetime.utcnow()
+                schedule.messages_remaining = 0
+            elif status == ScheduleStatus.FAILED:
+                schedule.completed_at = datetime.utcnow()
+            
+            self.db.commit()
+            self.db.refresh(schedule)
+            logger.info(f"📊 Schedule {schedule_id} updated: {status.value}, sent: {schedule.messages_sent}/{schedule.batch_size}")
+        
+        return schedule
+    
     def get_campaign_stats(self, campaign_id: uuid.UUID) -> Dict[str, Any]:
         """Get campaign statistics"""
         campaign = self.get_campaign(campaign_id)
