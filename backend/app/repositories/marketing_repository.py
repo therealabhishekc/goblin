@@ -38,16 +38,6 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         created_by: Optional[str] = None
     ) -> MarketingCampaignDB:
         """Create a new marketing campaign"""
-        
-        # Ensure target_audience is properly formatted
-        if target_audience and isinstance(target_audience, dict):
-            # If target_audience is provided, ensure it's not empty
-            if len(target_audience) > 0:
-                logger.info(f"📊 Creating campaign with target_audience: {target_audience}")
-            else:
-                # Empty dict, set to None
-                target_audience = None
-        
         campaign = MarketingCampaignDB(
             name=name,
             template_name=template_name,
@@ -66,7 +56,6 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         self.db.commit()
         self.db.refresh(campaign)
         logger.info(f"📊 Campaign created: {campaign.name} (ID: {campaign.id})")
-        logger.info(f"📊 Campaign target_audience stored as: {campaign.target_audience}")
         return campaign
     
     def get_campaign(self, campaign_id: uuid.UUID) -> Optional[MarketingCampaignDB]:
@@ -471,32 +460,19 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         
         # Apply target audience filters if provided
         if target_audience:
-            logger.info(f"📊 Filtering customers with target_audience: {target_audience}")
-            
             # Filter by customer_tier if specified and not "all"
-            if "customer_tier" in target_audience:
-                tier_value = target_audience["customer_tier"]
-                logger.info(f"📊 Customer tier filter: {tier_value}")
-                
-                if tier_value and tier_value != "all":
-                    query = query.filter(UserProfileDB.customer_tier == tier_value)
-                    logger.info(f"📊 Applied customer_tier filter: {tier_value}")
-                else:
-                    logger.info(f"📊 Skipping customer_tier filter (value is 'all' or empty)")
+            if "customer_tier" in target_audience and target_audience["customer_tier"] and target_audience["customer_tier"] != "all":
+                query = query.filter(UserProfileDB.customer_tier == target_audience["customer_tier"])
             
             if "tags" in target_audience and target_audience["tags"]:
                 # Customer has any of the specified tags
                 for tag in target_audience["tags"]:
                     query = query.filter(UserProfileDB.tags.contains([tag]))
-                logger.info(f"📊 Applied tags filter: {target_audience['tags']}")
-        else:
-            logger.info(f"📊 No target_audience filter provided, getting all subscribed customers")
         
         if limit:
             query = query.limit(limit)
         
         results = query.all()
-        logger.info(f"📊 Found {len(results)} customers matching criteria")
         return [r.whatsapp_phone for r in results]
     
     def record_analytics(

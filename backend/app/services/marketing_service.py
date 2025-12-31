@@ -27,7 +27,6 @@ class MarketingCampaignService:
         daily_send_limit: int = 250,
         priority: int = 5,
         scheduled_start_date: Optional[datetime] = None,
-        scheduled_end_date: Optional[datetime] = None,
         template_components: Optional[List[Dict]] = None,
         created_by: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -47,7 +46,6 @@ class MarketingCampaignService:
                 daily_send_limit=daily_send_limit,
                 priority=priority,
                 scheduled_start_date=scheduled_start_date,
-                scheduled_end_date=scheduled_end_date,
                 template_components=template_components,
                 created_by=created_by
             )
@@ -127,26 +125,18 @@ class MarketingCampaignService:
             if campaign.total_target_customers == 0:
                 raise ValueError("Campaign has no recipients. Add recipients before activating.")
             
-            # Calculate start and end dates
-            actual_start_date = start_date or date.today()
-            days_to_complete = (campaign.total_target_customers // campaign.daily_send_limit) + 1
-            estimated_completion = actual_start_date + timedelta(days=days_to_complete)
-            
-            # Update campaign with scheduled dates
-            from datetime import datetime as dt
-            campaign.scheduled_start_date = dt.combine(actual_start_date, dt.min.time())
-            campaign.scheduled_end_date = dt.combine(estimated_completion, dt.min.time())
-            db.commit()
-            db.refresh(campaign)
-            
             # Create send schedule
             scheduled_count = repo.schedule_campaign_sends(
                 campaign_id=campaign_uuid,
-                start_date=actual_start_date
+                start_date=start_date
             )
             
             # Activate campaign
             repo.update_campaign_status(campaign_uuid, CampaignStatus.ACTIVE)
+            
+            # Calculate estimated duration
+            days_to_complete = (campaign.total_target_customers // campaign.daily_send_limit) + 1
+            estimated_completion = (start_date or date.today()) + timedelta(days=days_to_complete)
             
             logger.info(f"✅ Campaign activated: {campaign.name}")
             logger.info(f"📊 {scheduled_count} recipients scheduled over {days_to_complete} days")
@@ -158,7 +148,7 @@ class MarketingCampaignService:
                 "daily_limit": campaign.daily_send_limit,
                 "estimated_days": days_to_complete,
                 "estimated_completion_date": estimated_completion.isoformat(),
-                "message": f"Campaign activated. Sending {campaign.daily_send_limit} messages/day starting {actual_start_date}"
+                "message": f"Campaign activated. Sending {campaign.daily_send_limit} messages/day starting {start_date or date.today()}"
             }
     
     @staticmethod
