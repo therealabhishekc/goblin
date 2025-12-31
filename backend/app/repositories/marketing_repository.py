@@ -12,6 +12,7 @@ from app.models.marketing import (
     MarketingCampaignDB, CampaignRecipientDB, CampaignSendScheduleDB, CampaignAnalyticsDB,
     CampaignStatus, RecipientStatus, ScheduleStatus
 )
+from app.models.whatsapp import WhatsAppMessageDB
 from app.repositories.base_repository import BaseRepository
 from app.core.logging import logger
 
@@ -519,7 +520,7 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
             )
             self.db.add(analytics)
         
-        # Calculate metrics for the day
+        # Calculate message metrics for the day
         stats = self.db.query(
             func.count(CampaignRecipientDB.id).filter(
                 CampaignRecipientDB.status == RecipientStatus.SENT.value
@@ -546,11 +547,87 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
             analytics.messages_read = stats.read or 0
             analytics.messages_failed = stats.failed or 0
             
-            # Calculate rates
+            # Calculate delivery and read rates
             if analytics.messages_sent > 0:
                 analytics.delivery_rate = round((analytics.messages_delivered / analytics.messages_sent) * 100, 2)
                 analytics.read_rate = round((analytics.messages_read / analytics.messages_sent) * 100, 2)
         
+        # Calculate engagement metrics (replies received from recipients)
+        # Get all recipients who were sent messages on this date
+        recipients_sent_today = self.db.query(CampaignRecipientDB.phone_number).filter(
+            and_(
+                CampaignRecipientDB.campaign_id == campaign_id,
+                func.date(CampaignRecipientDB.sent_at) == analytics_date
+            )
+        ).all()
+        
+        if recipients_sent_today:
+            recipient_phones = [r.phone_number for r in recipients_sent_today]
+            
+            # Count replies received from these recipients on this date
+            # Replies are incoming messages from recipients after campaign was sent
+            replies = self.db.query(
+                func.count(WhatsAppMessageDB.id).label('total_replies'),
+                func.count(func.distinct(WhatsAppMessageDB.phone_number)).label('unique_responders')
+            ).filter(
+                and_(
+                    WhatsAppMessageDB.phone_number.in_(recipient_phones),
+                    WhatsAppMessageDB.direction == 'incoming',
+                    func.date(WhatsAppMessageDB.timestamp) == analytics_date,
+                    WhatsAppMessageDB.timestamp >= func.coalesce(
+                        self.db.query(func.min(CampaignRecipientDB.sent_at)).filter(
+                            and_(
+                                CampaignRecipientDB.campaign_id == campaign_id,
+                                func.date(CampaignRecipientDB.sent_at) == analytics_date
+                            )
+                        ).scalar_subquery(),
+                        WhatsAppMessageDB.timestamp
+                    )
+                )
+            ).first()
+            
+            if replies:
+                analytics.replies_received = replies.total_replies or 0
+                analytics.unique_responders = replies.unique_responders or 0
+                
+                # Calculate response rate
+                if analytics.messages_sent > 0:
+                    analytics.response_rate = round((analytics.unique_responders / analytics.messages_sent) * 100, 2)
+            
+            # Calculate average response time (in minutes)
+            # Get response times for recipients who replied
+            response_times = self.db.query(
+                (func.timestampdiff(text('MINUTE'), CampaignRecipientDB.sent_at, WhatsAppMessageDB.timestamp)).label('response_time')
+            ).select_from(CampaignRecipientDB).join(
+                WhatsAppMessageDB,
+                and_(
+                    WhatsAppMessageDB.phone_number == CampaignRecipientDB.phone_number,
+                    WhatsAppMessageDB.direction == 'incoming',
+                    WhatsAppMessageDB.timestamp >= CampaignRecipientDB.sent_at,
+                    func.date(WhatsAppMessageDB.timestamp) == analytics_date
+                )
+            ).filter(
+                and_(
+                    CampaignRecipientDB.campaign_id == campaign_id,
+                    func.date(CampaignRecipientDB.sent_at) == analytics_date
+                )
+            ).group_by(
+                CampaignRecipientDB.phone_number
+            ).all()
+            
+            if response_times:
+                # Calculate average response time from first reply per recipient
+                valid_times = [rt.response_time for rt in response_times if rt.response_time is not None and rt.response_time > 0]
+                if valid_times:
+                    analytics.avg_response_time_minutes = round(sum(valid_times) / len(valid_times))
+        
         self.db.commit()
         self.db.refresh(analytics)
+        
+        logger.info(f"📊 Analytics recorded for campaign {campaign_id} on {analytics_date}: "
+                   f"Sent={analytics.messages_sent}, Delivered={analytics.messages_delivered}, "
+                   f"Read={analytics.messages_read}, Failed={analytics.messages_failed}, "
+                   f"Replies={analytics.replies_received}, Responders={analytics.unique_responders}, "
+                   f"AvgResponseTime={analytics.avg_response_time_minutes}min")
+        
         return analytics
