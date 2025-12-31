@@ -60,6 +60,7 @@ async def create_campaign(request: CampaignCreate):
             daily_send_limit=request.daily_send_limit,
             priority=request.priority,
             scheduled_start_date=request.scheduled_start_date,
+            scheduled_end_date=request.scheduled_end_date,
             template_components=request.template_components
         )
         
