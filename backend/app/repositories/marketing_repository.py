@@ -459,10 +459,11 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         
         # Apply target audience filters if provided
         if target_audience:
-            if "customer_tier" in target_audience:
+            # Filter by customer_tier if specified and not "all"
+            if "customer_tier" in target_audience and target_audience["customer_tier"] and target_audience["customer_tier"] != "all":
                 query = query.filter(UserProfileDB.customer_tier == target_audience["customer_tier"])
             
-            if "tags" in target_audience:
+            if "tags" in target_audience and target_audience["tags"]:
                 # Customer has any of the specified tags
                 for tag in target_audience["tags"]:
                     query = query.filter(UserProfileDB.tags.contains([tag]))

@@ -276,6 +276,12 @@ class MarketingCampaignService:
                     # Record analytics
                     repo.record_analytics(schedule.campaign_id, date.today())
                     
+                    # Check if campaign is completed (no more pending messages)
+                    db.refresh(campaign)  # Refresh to get updated counts
+                    if campaign.messages_pending == 0:
+                        repo.update_campaign_status(campaign.id, CampaignStatus.COMPLETED)
+                        logger.info(f"✅ Campaign {campaign.name} completed: All messages have been sent!")
+                    
                 except Exception as e:
                     logger.error(f"❌ Error processing schedule {schedule.id}: {e}")
                     # Mark schedule as failed

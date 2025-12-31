@@ -21,7 +21,7 @@ function CreateCampaign() {
     daily_send_limit: 250,
     priority: 5,
     target_audience: {
-      customer_tier: '',
+      customer_tier: 'all',  // Default to "all" tiers
       city: '',
       state: '',
       tags: '',
@@ -67,9 +67,9 @@ function CreateCampaign() {
     try {
       // Prepare target audience
       const targetAudience = {};
-      if (formData.target_audience.customer_tier) {
-        targetAudience.customer_tier = formData.target_audience.customer_tier;
-      }
+      // Always include customer_tier, default to "all" if not specified
+      targetAudience.customer_tier = formData.target_audience.customer_tier || "all";
+      
       if (formData.target_audience.city) {
         targetAudience.city = formData.target_audience.city;
       }
@@ -303,7 +303,7 @@ function CreateCampaign() {
                 value={formData.target_audience.customer_tier}
                 onChange={handleAudienceChange}
               >
-                <option value="">All Tiers</option>
+                <option value="all">All Tiers</option>
                 <option value="regular">Regular</option>
                 <option value="premium">Premium</option>
                 <option value="vip">VIP</option>
