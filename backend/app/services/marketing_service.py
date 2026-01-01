@@ -27,6 +27,7 @@ class MarketingCampaignService:
         daily_send_limit: int = 250,
         priority: int = 5,
         scheduled_start_date: Optional[datetime] = None,
+        scheduled_end_date: Optional[datetime] = None,
         template_components: Optional[List[Dict]] = None,
         created_by: Optional[str] = None
     ) -> Dict[str, Any]:
@@ -46,6 +47,7 @@ class MarketingCampaignService:
                 daily_send_limit=daily_send_limit,
                 priority=priority,
                 scheduled_start_date=scheduled_start_date,
+                scheduled_end_date=scheduled_end_date,
                 template_components=template_components,
                 created_by=created_by
             )

@@ -7,11 +7,11 @@ const config = {
   
   // For production (AWS App Runner)
   // UPDATE THIS with your App Runner URL
-  PRODUCTION_API_URL: 'https://ys7ji5pa7k.us-east-1.awsapprunner.com',
+  PRODUCTION_API_URL: 'https://i2qsvdfjux.us-east-1.awsapprunner.com',
   
   // Current environment
   // Uses REACT_APP_API_URL env var if set, otherwise defaults to PRODUCTION_API_URL
-  API_URL: process.env.REACT_APP_API_URL || 'https://ys7ji5pa7k.us-east-1.awsapprunner.com'
+  API_URL: process.env.REACT_APP_API_URL || 'https://i2qsvdfjux.us-east-1.awsapprunner.com'
 };
 
 export default config;

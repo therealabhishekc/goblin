@@ -60,6 +60,7 @@ async def create_campaign(request: CampaignCreate):
             daily_send_limit=request.daily_send_limit,
             priority=request.priority,
             scheduled_start_date=request.scheduled_start_date,
+            scheduled_end_date=request.scheduled_end_date,
             template_components=request.template_components
         )
         
@@ -210,6 +211,8 @@ async def get_campaign_stats(campaign_id: str):
             raise HTTPException(status_code=404, detail="Campaign not found")
         
         return stats
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"❌ Error getting campaign stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
