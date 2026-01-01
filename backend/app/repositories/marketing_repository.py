@@ -418,7 +418,11 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
             "progress_percentage": round((campaign.messages_sent / campaign.total_target_customers) * 100, 2) if campaign.total_target_customers > 0 else 0,
             "delivery_rate": delivery_rate,
             "read_rate": read_rate,
-            "estimated_completion_date": estimated_completion
+            "estimated_completion_date": estimated_completion,
+            "scheduled_start_date": campaign.scheduled_start_date.isoformat() if campaign.scheduled_start_date else None,
+            "scheduled_end_date": campaign.scheduled_end_date.isoformat() if campaign.scheduled_end_date else None,
+            "template_name": campaign.template_name,
+            "daily_send_limit": campaign.daily_send_limit
         }
     
     def check_duplicate_send(self, campaign_id: uuid.UUID, phone_number: str) -> bool:

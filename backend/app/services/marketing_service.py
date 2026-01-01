@@ -33,6 +33,8 @@ class MarketingCampaignService:
     ) -> Dict[str, Any]:
         """
         Create a new marketing campaign
+        Note: scheduled_start_date and scheduled_end_date will be auto-populated
+        during activation if not provided during creation.
         """
         with get_db_session() as db:
             repo = MarketingCampaignRepository(db)
@@ -127,6 +129,20 @@ class MarketingCampaignService:
             if campaign.total_target_customers == 0:
                 raise ValueError("Campaign has no recipients. Add recipients before activating.")
             
+            # Default to today if no start_date provided
+            if not start_date:
+                start_date = date.today()
+            
+            # Calculate estimated duration
+            days_to_complete = (campaign.total_target_customers // campaign.daily_send_limit) + 1
+            estimated_completion = start_date + timedelta(days=days_to_complete)
+            
+            # Update campaign with scheduled dates
+            campaign.scheduled_start_date = datetime.combine(start_date, datetime.min.time())
+            campaign.scheduled_end_date = datetime.combine(estimated_completion, datetime.min.time())
+            db.commit()
+            db.refresh(campaign)
+            
             # Create send schedule
             scheduled_count = repo.schedule_campaign_sends(
                 campaign_id=campaign_uuid,
@@ -136,12 +152,9 @@ class MarketingCampaignService:
             # Activate campaign
             repo.update_campaign_status(campaign_uuid, CampaignStatus.ACTIVE)
             
-            # Calculate estimated duration
-            days_to_complete = (campaign.total_target_customers // campaign.daily_send_limit) + 1
-            estimated_completion = (start_date or date.today()) + timedelta(days=days_to_complete)
-            
             logger.info(f"✅ Campaign activated: {campaign.name}")
             logger.info(f"📊 {scheduled_count} recipients scheduled over {days_to_complete} days")
+            logger.info(f"📅 Schedule: {start_date} to {estimated_completion}")
             
             return {
                 "campaign_id": campaign_id,
@@ -149,8 +162,9 @@ class MarketingCampaignService:
                 "recipients_scheduled": scheduled_count,
                 "daily_limit": campaign.daily_send_limit,
                 "estimated_days": days_to_complete,
+                "scheduled_start_date": start_date.isoformat(),
                 "estimated_completion_date": estimated_completion.isoformat(),
-                "message": f"Campaign activated. Sending {campaign.daily_send_limit} messages/day starting {start_date or date.today()}"
+                "message": f"Campaign activated. Sending {campaign.daily_send_limit} messages/day starting {start_date}"
             }
     
     @staticmethod

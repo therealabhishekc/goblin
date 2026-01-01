@@ -282,6 +282,30 @@ function CampaignDetails() {
                 {getStatusText(stats.status)}
               </span>
             </div>
+            {stats.template_name && (
+              <div>
+                <strong>Template:</strong><br />
+                <span style={{ color: '#495057' }}>{stats.template_name}</span>
+              </div>
+            )}
+            {stats.daily_send_limit && (
+              <div>
+                <strong>Daily Limit:</strong><br />
+                <span style={{ color: '#495057' }}>{formatNumber(stats.daily_send_limit)} messages/day</span>
+              </div>
+            )}
+            {stats.scheduled_start_date && (
+              <div>
+                <strong>Scheduled Start:</strong><br />
+                <span style={{ color: '#495057' }}>{formatDate(stats.scheduled_start_date)}</span>
+              </div>
+            )}
+            {stats.scheduled_end_date && (
+              <div>
+                <strong>Scheduled End:</strong><br />
+                <span style={{ color: '#495057' }}>{formatDate(stats.scheduled_end_date)}</span>
+              </div>
+            )}
           </div>
         </div>
 
