@@ -647,8 +647,9 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
             
             # Calculate average response time (in minutes)
             # Get response times for recipients who replied
+            # Use PostgreSQL EXTRACT(EPOCH FROM ...) to get time difference in seconds, then convert to minutes
             response_times = self.db.query(
-                (func.timestampdiff(text('MINUTE'), CampaignRecipientDB.sent_at, WhatsAppMessageDB.timestamp)).label('response_time')
+                (func.extract(text('EPOCH'), WhatsAppMessageDB.timestamp - CampaignRecipientDB.sent_at) / 60).label('response_time')
             ).select_from(CampaignRecipientDB).join(
                 WhatsAppMessageDB,
                 and_(
