@@ -179,18 +179,12 @@ class MarketingCampaignService:
             # Get today's schedule
             schedules = repo.get_today_schedule()
             
-            if not schedules:
-                logger.info("📊 No campaigns scheduled for today")
-                return {
-                    "date": date.today().isoformat(),
-                    "campaigns_processed": 0,
-                    "messages_sent": 0
-                }
-            
             total_sent = 0
             campaigns_processed = 0
             
-            for schedule in schedules:
+            # Process scheduled campaigns
+            if schedules:
+                for schedule in schedules:
                 try:
                     # Update schedule status to PROCESSING
                     repo.update_schedule_status(schedule.id, ScheduleStatus.PROCESSING)
@@ -324,12 +318,93 @@ class MarketingCampaignService:
                     except Exception as update_error:
                         logger.error(f"❌ Failed to update schedule status: {update_error}")
             
-            return {
-                "date": date.today().isoformat(),
-                "campaigns_processed": campaigns_processed,
-                "messages_sent": total_sent,
-                "message": f"Processed {campaigns_processed} campaigns, sent {total_sent} messages"
-            }
+            # Process retries for active campaigns with failed recipients (even without schedule)
+            logger.info("🔄 Checking for failed recipients in active campaigns...")
+            active_campaigns = repo.get_active_campaigns()
+            
+            for campaign in active_campaigns:
+                try:
+                    # Skip if campaign was already processed in the schedule
+                    if any(schedule.campaign_id == campaign.id for schedule in (schedules or [])):
+                        continue
+                    
+                    # Get failed recipients eligible for retry
+                    failed_recipients = repo.get_failed_recipients_for_retry(
+                        campaign_id=campaign.id,
+                        limit=50  # Process up to 50 retries per campaign per cycle
+                    )
+                    
+                    if not failed_recipients:
+                        continue
+                    
+                    logger.info(f"🔄 Found {len(failed_recipients)} failed recipients to retry in campaign: {campaign.name}")
+                    
+                    # Reset failed recipients to pending for retry
+                    for failed_recipient in failed_recipients:
+                        repo.reset_recipient_for_retry(failed_recipient.id)
+                    
+                    # Get refreshed list of pending recipients
+                    recipients = repo.get_pending_recipients(
+                        campaign_id=campaign.id,
+                        limit=50,
+                        scheduled_date=None  # Don't filter by date for retries
+                    )
+                    
+                    sent_count = 0
+                    for recipient in recipients:
+                        try:
+                            # Send via SQS
+                            sqs_message_id = sqs_service.send_outgoing_message({
+                                "phone_number": recipient.phone_number,
+                                "template_name": campaign.message_template,
+                                "template_language": campaign.template_language or "en",
+                                "campaign_id": str(campaign.id),
+                                "recipient_id": str(recipient.id),
+                                "message_type": "template"
+                            })
+                            
+                            if sqs_message_id:
+                                # Update recipient status to QUEUED
+                                repo.update_recipient_status(
+                                    recipient.id,
+                                    RecipientStatus.QUEUED
+                                )
+                                sent_count += 1
+                                logger.info(f"✅ Queued retry for {recipient.phone_number} (SQS: {sqs_message_id})")
+                            
+                        except Exception as e:
+                            logger.error(f"❌ Failed to retry {recipient.phone_number}: {e}")
+                            repo.update_recipient_status(
+                                recipient.id,
+                                RecipientStatus.FAILED,
+                                failure_reason=str(e)
+                            )
+                    
+                    if sent_count > 0:
+                        total_sent += sent_count
+                        campaigns_processed += 1
+                        logger.info(f"✅ Campaign {campaign.name}: Retried {sent_count} messages")
+                        
+                        # Record analytics
+                        repo.record_analytics(campaign.id, date.today())
+                        
+                except Exception as e:
+                    logger.error(f"❌ Error processing retries for campaign {campaign.id}: {e}")
+            
+            if campaigns_processed > 0:
+                return {
+                    "date": date.today().isoformat(),
+                    "campaigns_processed": campaigns_processed,
+                    "messages_sent": total_sent,
+                    "message": f"Processed {campaigns_processed} campaigns, sent {total_sent} messages"
+                }
+            else:
+                logger.info("📊 No campaigns scheduled for today and no retries needed")
+                return {
+                    "date": date.today().isoformat(),
+                    "campaigns_processed": 0,
+                    "messages_sent": 0
+                }
     
     @staticmethod
     def get_campaign_stats(campaign_id: str) -> Dict[str, Any]:
