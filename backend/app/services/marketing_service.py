@@ -185,138 +185,138 @@ class MarketingCampaignService:
             # Process scheduled campaigns
             if schedules:
                 for schedule in schedules:
-                try:
-                    # Update schedule status to PROCESSING
-                    repo.update_schedule_status(schedule.id, ScheduleStatus.PROCESSING)
-                    
-                    # Get campaign
-                    campaign = repo.get_campaign(schedule.campaign_id)
-                    if not campaign or campaign.status != CampaignStatus.ACTIVE.value:
-                        logger.warning(f"⚠️ Skipping schedule for inactive campaign {schedule.campaign_id}")
-                        repo.update_schedule_status(schedule.id, ScheduleStatus.FAILED)
-                        continue
-                    
-                    logger.info(f"🔍 Processing campaign: {campaign.name} (ID: {campaign.id})")
-                    logger.info(f"📊 Campaign stats: total={campaign.total_target_customers}, sent={campaign.messages_sent}, pending={campaign.messages_pending}")
-                    
-                    # Get pending recipients for today
-                    recipients = repo.get_pending_recipients(
-                        campaign_id=schedule.campaign_id,
-                        limit=schedule.batch_size,
-                        scheduled_date=date.today()
-                    )
-                    
-                    # Get failed recipients eligible for retry
-                    failed_recipients = repo.get_failed_recipients_for_retry(
-                        campaign_id=schedule.campaign_id,
-                        limit=max(0, schedule.batch_size - len(recipients))  # Fill remaining capacity
-                    )
-                    
-                    # Reset failed recipients to pending for retry
-                    for failed_recipient in failed_recipients:
-                        repo.reset_recipient_for_retry(failed_recipient.id)
-                    
-                    # Refresh recipients list to include retries
-                    if failed_recipients:
+                    try:
+                        # Update schedule status to PROCESSING
+                        repo.update_schedule_status(schedule.id, ScheduleStatus.PROCESSING)
+                        
+                        # Get campaign
+                        campaign = repo.get_campaign(schedule.campaign_id)
+                        if not campaign or campaign.status != CampaignStatus.ACTIVE.value:
+                            logger.warning(f"⚠️ Skipping schedule for inactive campaign {schedule.campaign_id}")
+                            repo.update_schedule_status(schedule.id, ScheduleStatus.FAILED)
+                            continue
+                        
+                        logger.info(f"🔍 Processing campaign: {campaign.name} (ID: {campaign.id})")
+                        logger.info(f"📊 Campaign stats: total={campaign.total_target_customers}, sent={campaign.messages_sent}, pending={campaign.messages_pending}")
+                        
+                        # Get pending recipients for today
                         recipients = repo.get_pending_recipients(
                             campaign_id=schedule.campaign_id,
                             limit=schedule.batch_size,
                             scheduled_date=date.today()
                         )
-                    
-                    logger.info(f"📤 Found {len(recipients)} pending recipients for campaign: {campaign.name} (including {len(failed_recipients)} retries)")
-                    if len(recipients) == 0:
-                        logger.warning(f"⚠️ No recipients found for today. Schedule: {schedule.send_date}, Batch size: {schedule.batch_size}")
-                        # Mark schedule as completed if no recipients
-                        repo.update_schedule_status(schedule.id, ScheduleStatus.COMPLETED, messages_sent=0)
-                        continue
-                    
-                    # Send messages
-                    sent_count = 0
-                    for recipient in recipients:
-                        try:
-                            logger.info(f"🔄 Checking recipient: {recipient.phone_number}")
-                            
-                            # Check subscription status before sending
-                            user_repo = UserRepository(db)
-                            is_subscribed = user_repo.is_user_subscribed(recipient.phone_number)
-                            
-                            logger.info(f"📋 Subscription status for {recipient.phone_number}: {is_subscribed}")
-                            
-                            if not is_subscribed:
-                                # Skip unsubscribed users
-                                repo.update_recipient_status(
-                                    recipient.id,
-                                    RecipientStatus.SKIPPED,
-                                    failure_reason="User unsubscribed"
-                                )
-                                logger.warning(f"📵 Skipped unsubscribed user: {recipient.phone_number}")
-                                continue
-                            
-                            # Prepare message data
-                            message_data = {
-                                "type": "template",
-                                "template_name": campaign.template_name,
-                                "language_code": campaign.language_code
-                            }
-                            
-                            # Add components or parameters
-                            if campaign.template_components:
-                                message_data["components"] = campaign.template_components
-                            
-                            # Send via SQS
-                            sqs_message_id = await send_outgoing_message(
-                                phone_number=recipient.phone_number,
-                                message_data=message_data,
-                                metadata={
-                                    "campaign_id": str(campaign.id),
-                                    "campaign_name": campaign.name,
-                                    "recipient_id": str(recipient.id),
-                                    "source": "marketing_campaign"
+                        
+                        # Get failed recipients eligible for retry
+                        failed_recipients = repo.get_failed_recipients_for_retry(
+                            campaign_id=schedule.campaign_id,
+                            limit=max(0, schedule.batch_size - len(recipients))  # Fill remaining capacity
+                        )
+                        
+                        # Reset failed recipients to pending for retry
+                        for failed_recipient in failed_recipients:
+                            repo.reset_recipient_for_retry(failed_recipient.id)
+                        
+                        # Refresh recipients list to include retries
+                        if failed_recipients:
+                            recipients = repo.get_pending_recipients(
+                                campaign_id=schedule.campaign_id,
+                                limit=schedule.batch_size,
+                                scheduled_date=date.today()
+                            )
+                        
+                        logger.info(f"📤 Found {len(recipients)} pending recipients for campaign: {campaign.name} (including {len(failed_recipients)} retries)")
+                        if len(recipients) == 0:
+                            logger.warning(f"⚠️ No recipients found for today. Schedule: {schedule.send_date}, Batch size: {schedule.batch_size}")
+                            # Mark schedule as completed if no recipients
+                            repo.update_schedule_status(schedule.id, ScheduleStatus.COMPLETED, messages_sent=0)
+                            continue
+                        
+                        # Send messages
+                        sent_count = 0
+                        for recipient in recipients:
+                            try:
+                                logger.info(f"🔄 Checking recipient: {recipient.phone_number}")
+                                
+                                # Check subscription status before sending
+                                user_repo = UserRepository(db)
+                                is_subscribed = user_repo.is_user_subscribed(recipient.phone_number)
+                                
+                                logger.info(f"📋 Subscription status for {recipient.phone_number}: {is_subscribed}")
+                                
+                                if not is_subscribed:
+                                    # Skip unsubscribed users
+                                    repo.update_recipient_status(
+                                        recipient.id,
+                                        RecipientStatus.SKIPPED,
+                                        failure_reason="User unsubscribed"
+                                    )
+                                    logger.warning(f"📵 Skipped unsubscribed user: {recipient.phone_number}")
+                                    continue
+                                
+                                # Prepare message data
+                                message_data = {
+                                    "type": "template",
+                                    "template_name": campaign.template_name,
+                                    "language_code": campaign.language_code
                                 }
-                            )
-                            
-                            if sqs_message_id:
-                                # Update recipient status to QUEUED (will be updated to SENT with WhatsApp message ID by outgoing processor)
+                                
+                                # Add components or parameters
+                                if campaign.template_components:
+                                    message_data["components"] = campaign.template_components
+                                
+                                # Send via SQS
+                                sqs_message_id = await send_outgoing_message(
+                                    phone_number=recipient.phone_number,
+                                    message_data=message_data,
+                                    metadata={
+                                        "campaign_id": str(campaign.id),
+                                        "campaign_name": campaign.name,
+                                        "recipient_id": str(recipient.id),
+                                        "source": "marketing_campaign"
+                                    }
+                                )
+                                
+                                if sqs_message_id:
+                                    # Update recipient status to QUEUED (will be updated to SENT with WhatsApp message ID by outgoing processor)
+                                    repo.update_recipient_status(
+                                        recipient.id,
+                                        RecipientStatus.QUEUED
+                                    )
+                                    sent_count += 1
+                                    logger.info(f"✅ Queued message for {recipient.phone_number} (SQS: {sqs_message_id})")
+                                
+                            except Exception as e:
+                                logger.error(f"❌ Failed to send to {recipient.phone_number}: {e}")
                                 repo.update_recipient_status(
                                     recipient.id,
-                                    RecipientStatus.QUEUED
+                                    RecipientStatus.FAILED,
+                                    failure_reason=str(e)
                                 )
-                                sent_count += 1
-                                logger.info(f"✅ Queued message for {recipient.phone_number} (SQS: {sqs_message_id})")
-                            
-                        except Exception as e:
-                            logger.error(f"❌ Failed to send to {recipient.phone_number}: {e}")
-                            repo.update_recipient_status(
-                                recipient.id,
-                                RecipientStatus.FAILED,
-                                failure_reason=str(e)
-                            )
-                    
-                    total_sent += sent_count
-                    campaigns_processed += 1
-                    
-                    logger.info(f"✅ Campaign {campaign.name}: Sent {sent_count}/{len(recipients)} messages")
-                    
-                    # Update schedule with sent count and mark as completed
-                    repo.update_schedule_status(schedule.id, ScheduleStatus.COMPLETED, messages_sent=sent_count)
-                    
-                    # Record analytics
-                    repo.record_analytics(schedule.campaign_id, date.today())
-                    
-                    # Check if campaign is completed (no more pending messages)
-                    db.refresh(campaign)  # Refresh to get updated counts
-                    if campaign.messages_pending == 0:
-                        repo.update_campaign_status(campaign.id, CampaignStatus.COMPLETED)
-                        logger.info(f"✅ Campaign {campaign.name} completed: All messages have been sent!")
-                    
-                except Exception as e:
-                    logger.error(f"❌ Error processing schedule {schedule.id}: {e}")
-                    # Mark schedule as failed
-                    try:
-                        repo.update_schedule_status(schedule.id, ScheduleStatus.FAILED)
-                    except Exception as update_error:
-                        logger.error(f"❌ Failed to update schedule status: {update_error}")
+                        
+                        total_sent += sent_count
+                        campaigns_processed += 1
+                        
+                        logger.info(f"✅ Campaign {campaign.name}: Sent {sent_count}/{len(recipients)} messages")
+                        
+                        # Update schedule with sent count and mark as completed
+                        repo.update_schedule_status(schedule.id, ScheduleStatus.COMPLETED, messages_sent=sent_count)
+                        
+                        # Record analytics
+                        repo.record_analytics(schedule.campaign_id, date.today())
+                        
+                        # Check if campaign is completed (no more pending messages)
+                        db.refresh(campaign)  # Refresh to get updated counts
+                        if campaign.messages_pending == 0:
+                            repo.update_campaign_status(campaign.id, CampaignStatus.COMPLETED)
+                            logger.info(f"✅ Campaign {campaign.name} completed: All messages have been sent!")
+                        
+                    except Exception as e:
+                        logger.error(f"❌ Error processing schedule {schedule.id}: {e}")
+                        # Mark schedule as failed
+                        try:
+                            repo.update_schedule_status(schedule.id, ScheduleStatus.FAILED)
+                        except Exception as update_error:
+                            logger.error(f"❌ Failed to update schedule status: {update_error}")
             
             # Process retries for active campaigns with failed recipients (even without schedule)
             logger.info("🔄 Checking for failed recipients in active campaigns...")
