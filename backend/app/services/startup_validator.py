@@ -83,7 +83,7 @@ class StartupValidator:
                 
                 # Test tables exist (basic schema check)
                 core_tables = ['user_profiles', 'whatsapp_messages', 'business_metrics']
-                marketing_tables = ['marketing_campaigns', 'campaign_recipients', 'campaign_send_schedule', 'campaign_analytics']
+                marketing_tables = ['marketing_campaigns', 'campaign_recipients', 'campaign_send_schedule']
                 
                 try:
                     # Check core tables

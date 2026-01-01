@@ -301,9 +301,6 @@ class MarketingCampaignService:
                         # Update schedule with sent count and mark as completed
                         repo.update_schedule_status(schedule.id, ScheduleStatus.COMPLETED, messages_sent=sent_count)
                         
-                        # Record analytics
-                        repo.record_analytics(schedule.campaign_id, date.today())
-                        
                         # Check if campaign is completed (no more pending messages)
                         db.refresh(campaign)  # Refresh to get updated counts
                         if campaign.messages_pending == 0:
@@ -384,9 +381,6 @@ class MarketingCampaignService:
                         total_sent += sent_count
                         campaigns_processed += 1
                         logger.info(f"✅ Campaign {campaign.name}: Retried {sent_count} messages")
-                        
-                        # Record analytics
-                        repo.record_analytics(campaign.id, date.today())
                         
                 except Exception as e:
                     logger.error(f"❌ Error processing retries for campaign {campaign.id}: {e}")

@@ -309,40 +309,6 @@ CREATE TABLE IF NOT EXISTS campaign_send_schedule (
     CONSTRAINT unique_campaign_date_batch UNIQUE (campaign_id, send_date, batch_number)
 );
 
--- 4. CAMPAIGN ANALYTICS TABLE
--- Daily aggregated statistics for campaigns
-CREATE TABLE IF NOT EXISTS campaign_analytics (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
-    -- Relationships
-    campaign_id UUID NOT NULL REFERENCES marketing_campaigns(id) ON DELETE CASCADE,
-    
-    -- Analytics date
-    date DATE NOT NULL,
-    
-    -- Message metrics
-    messages_sent INTEGER DEFAULT 0,
-    messages_delivered INTEGER DEFAULT 0,
-    messages_read INTEGER DEFAULT 0,
-    messages_failed INTEGER DEFAULT 0,
-    
-    -- Engagement metrics
-    replies_received INTEGER DEFAULT 0,
-    unique_responders INTEGER DEFAULT 0,
-    
-    -- Performance metrics
-    delivery_rate DECIMAL(5,2),  -- Percentage
-    read_rate DECIMAL(5,2),  -- Percentage
-    response_rate DECIMAL(5,2),  -- Percentage
-    avg_response_time_minutes INTEGER,
-    
-    -- Timestamps
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
-    CONSTRAINT unique_campaign_date UNIQUE (campaign_id, date)
-);
-
 -- Marketing campaign indexes
 CREATE INDEX IF NOT EXISTS idx_campaigns_status ON marketing_campaigns(status);
 CREATE INDEX IF NOT EXISTS idx_campaigns_priority ON marketing_campaigns(priority);
@@ -362,10 +328,6 @@ CREATE INDEX IF NOT EXISTS idx_schedule_campaign ON campaign_send_schedule(campa
 CREATE INDEX IF NOT EXISTS idx_schedule_date ON campaign_send_schedule(send_date);
 CREATE INDEX IF NOT EXISTS idx_schedule_status ON campaign_send_schedule(status);
 CREATE INDEX IF NOT EXISTS idx_schedule_campaign_date ON campaign_send_schedule(campaign_id, send_date);
-
--- Analytics indexes
-CREATE INDEX IF NOT EXISTS idx_analytics_campaign ON campaign_analytics(campaign_id);
-CREATE INDEX IF NOT EXISTS idx_analytics_date ON campaign_analytics(date);
 
 -- =============================================================================
 -- SECTION 10: MARKETING CAMPAIGNS FUNCTIONS AND TRIGGERS
@@ -436,10 +398,6 @@ DROP TRIGGER IF EXISTS update_schedule_updated_at ON campaign_send_schedule;
 CREATE TRIGGER update_schedule_updated_at BEFORE UPDATE ON campaign_send_schedule
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS update_analytics_updated_at ON campaign_analytics;
-CREATE TRIGGER update_analytics_updated_at BEFORE UPDATE ON campaign_analytics
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 -- =============================================================================
 -- SECTION 8: GRANT PERMISSIONS FOR MARKETING TABLES
 -- =============================================================================
@@ -450,7 +408,6 @@ BEGIN
         GRANT ALL PRIVILEGES ON marketing_campaigns TO app_user;
         GRANT ALL PRIVILEGES ON campaign_recipients TO app_user;
         GRANT ALL PRIVILEGES ON campaign_send_schedule TO app_user;
-        GRANT ALL PRIVILEGES ON campaign_analytics TO app_user;
     END IF;
 END $$;
 
@@ -541,9 +498,7 @@ SELECT 'marketing_campaigns' as table_name, COUNT(*) as row_count FROM marketing
 UNION ALL
 SELECT 'campaign_recipients' as table_name, COUNT(*) as row_count FROM campaign_recipients
 UNION ALL
-SELECT 'campaign_send_schedule' as table_name, COUNT(*) as row_count FROM campaign_send_schedule
-UNION ALL
-SELECT 'campaign_analytics' as table_name, COUNT(*) as row_count FROM campaign_analytics;
+SELECT 'campaign_send_schedule' as table_name, COUNT(*) as row_count FROM campaign_send_schedule;
 
 -- =============================================================================
 -- MIGRATION COMPLETE!
@@ -551,7 +506,7 @@ SELECT 'campaign_analytics' as table_name, COUNT(*) as row_count FROM campaign_a
 -- All tables, columns, indexes, constraints, functions, triggers, and views
 -- have been created/updated.
 -- 
--- Total Tables: 8
+-- Total Tables: 7
 --   Core Tables (3):
 --     - user_profiles
 --     - whatsapp_messages
@@ -560,7 +515,6 @@ SELECT 'campaign_analytics' as table_name, COUNT(*) as row_count FROM campaign_a
 --     - marketing_campaigns
 --     - campaign_recipients
 --     - campaign_send_schedule
---     - campaign_analytics
 -- 
 -- Run verification queries above to ensure everything is working correctly.
 -- =============================================================================

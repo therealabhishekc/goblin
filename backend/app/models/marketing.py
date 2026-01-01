@@ -239,35 +239,3 @@ class CampaignSendScheduleDB(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-
-class CampaignAnalyticsDB(Base):
-    """Campaign analytics database table"""
-    __tablename__ = "campaign_analytics"
-    
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    
-    # Relationships
-    campaign_id = Column(UUID(as_uuid=True), ForeignKey('marketing_campaigns.id', ondelete='CASCADE'), nullable=False)
-    
-    # Date
-    date = Column(Date, nullable=False)
-    
-    # Message metrics
-    messages_sent = Column(Integer, default=0)
-    messages_delivered = Column(Integer, default=0)
-    messages_read = Column(Integer, default=0)
-    messages_failed = Column(Integer, default=0)
-    
-    # Engagement metrics
-    replies_received = Column(Integer, default=0)
-    unique_responders = Column(Integer, default=0)
-    
-    # Performance metrics
-    delivery_rate = Column(Numeric(5, 2))
-    read_rate = Column(Numeric(5, 2))
-    response_rate = Column(Numeric(5, 2))
-    avg_response_time_minutes = Column(Integer)
-    
-    # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
