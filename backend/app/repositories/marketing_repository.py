@@ -169,6 +169,55 @@ class MarketingCampaignRepository(BaseRepository[MarketingCampaignDB]):
         
         return query.limit(limit).all()
     
+    def get_failed_recipients_for_retry(
+        self,
+        campaign_id: uuid.UUID,
+        limit: int = 250
+    ) -> List[CampaignRecipientDB]:
+        """
+        Get failed recipients that can be retried
+        Returns recipients where retry_count < max_retries
+        """
+        recipients = self.db.query(CampaignRecipientDB).filter(
+            and_(
+                CampaignRecipientDB.campaign_id == campaign_id,
+                CampaignRecipientDB.status == RecipientStatus.FAILED.value,
+                CampaignRecipientDB.retry_count < CampaignRecipientDB.max_retries
+            )
+        ).limit(limit).all()
+        
+        logger.info(f"📊 Found {len(recipients)} failed recipients eligible for retry in campaign {campaign_id}")
+        return recipients
+    
+    def reset_recipient_for_retry(
+        self,
+        recipient_id: uuid.UUID
+    ) -> Optional[CampaignRecipientDB]:
+        """
+        Reset a failed recipient to pending status for retry
+        Keeps retry_count and failure history intact
+        """
+        recipient = self.db.query(CampaignRecipientDB).filter(
+            CampaignRecipientDB.id == recipient_id
+        ).first()
+        
+        if recipient:
+            # Reset status to pending
+            recipient.status = RecipientStatus.PENDING.value
+            # Clear timestamps (but keep failed_at for history)
+            recipient.sent_at = None
+            recipient.delivered_at = None
+            recipient.read_at = None
+            recipient.whatsapp_message_id = None
+            # Schedule for today
+            recipient.scheduled_send_date = date.today()
+            
+            self.db.commit()
+            self.db.refresh(recipient)
+            logger.info(f"🔄 Reset recipient {recipient.phone_number} for retry (attempt {recipient.retry_count + 1}/{recipient.max_retries})")
+        
+        return recipient
+    
     def update_recipient_status(
         self,
         recipient_id: uuid.UUID,

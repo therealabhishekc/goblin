@@ -212,7 +212,25 @@ class MarketingCampaignService:
                         scheduled_date=date.today()
                     )
                     
-                    logger.info(f"📤 Found {len(recipients)} pending recipients for campaign: {campaign.name}")
+                    # Get failed recipients eligible for retry
+                    failed_recipients = repo.get_failed_recipients_for_retry(
+                        campaign_id=schedule.campaign_id,
+                        limit=max(0, schedule.batch_size - len(recipients))  # Fill remaining capacity
+                    )
+                    
+                    # Reset failed recipients to pending for retry
+                    for failed_recipient in failed_recipients:
+                        repo.reset_recipient_for_retry(failed_recipient.id)
+                    
+                    # Refresh recipients list to include retries
+                    if failed_recipients:
+                        recipients = repo.get_pending_recipients(
+                            campaign_id=schedule.campaign_id,
+                            limit=schedule.batch_size,
+                            scheduled_date=date.today()
+                        )
+                    
+                    logger.info(f"📤 Found {len(recipients)} pending recipients for campaign: {campaign.name} (including {len(failed_recipients)} retries)")
                     if len(recipients) == 0:
                         logger.warning(f"⚠️ No recipients found for today. Schedule: {schedule.send_date}, Batch size: {schedule.batch_size}")
                         # Mark schedule as completed if no recipients
