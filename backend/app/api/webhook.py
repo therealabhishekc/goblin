@@ -348,6 +348,29 @@ async def process_status_update(
     try:
         logger.info(f"📊 Status update: {message_id} -> {status}")
         
+        # Extract error information if message failed
+        failure_reason = None
+        if status == "failed":
+            # WhatsApp sends error details in the 'errors' array
+            errors = status_update.get("errors", [])
+            if errors:
+                error = errors[0]  # Get first error
+                error_code = error.get("code", "unknown")
+                error_title = error.get("title", "Unknown error")
+                error_message = error.get("message", "")
+                error_details = error.get("error_data", {}).get("details", "")
+                
+                # Construct failure reason string
+                failure_reason = f"Error {error_code}: {error_title}"
+                if error_message:
+                    failure_reason += f" - {error_message}"
+                if error_details:
+                    failure_reason += f" ({error_details})"
+                
+                logger.warning(f"❌ Message {message_id} failed: {failure_reason}")
+            else:
+                failure_reason = "Message delivery failed (no error details provided)"
+        
         # Update both campaign_recipients and whatsapp_messages tables
         from app.core.database import get_db_session
         from app.repositories.marketing_repository import MarketingCampaignRepository
@@ -380,10 +403,14 @@ async def process_status_update(
                     repo.update_recipient_status(
                         recipient.id,
                         recipient_status,
-                        whatsapp_message_id=message_id
+                        whatsapp_message_id=message_id,
+                        failure_reason=failure_reason  # Pass failure reason
                     )
                     campaign_updated = True
-                    logger.info(f"✅ Updated campaign recipient status: {recipient.phone_number} -> {status}")
+                    if failure_reason:
+                        logger.info(f"✅ Updated campaign recipient status: {recipient.phone_number} -> {status} (reason: {failure_reason})")
+                    else:
+                        logger.info(f"✅ Updated campaign recipient status: {recipient.phone_number} -> {status}")
             
             # 2. Update whatsapp_messages table status
             whatsapp_message = db.query(WhatsAppMessage).filter(
