@@ -112,6 +112,15 @@ class WhatsAppMessageDB(Base):
     direction = Column(String(20), default="incoming", index=True)  # 'incoming' or 'outgoing'
     timestamp = Column(DateTime, default=datetime.utcnow, index=True)
     
+    # Status timestamps (similar to campaign_recipients)
+    sent_at = Column(DateTime)
+    delivered_at = Column(DateTime)
+    read_at = Column(DateTime)
+    failed_at = Column(DateTime)
+    
+    # Failure tracking
+    failed_reason = Column(Text)
+    
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

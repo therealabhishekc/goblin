@@ -109,15 +109,17 @@ class WhatsAppService:
             result = await send_whatsapp_message(phone_number, message_data)
             
             # Store the sent message in database
+            now = datetime.utcnow()
             sent_message_data = {
                 "message_id": result.get('messages', [{}])[0].get('id'),
                 "from_phone": "business",  # This is an outgoing message
                 "to_phone": phone_number,
                 "message_type": message_data.get("type", "text"),
                 "content": message_data.get("content", str(message_data)),
-                "timestamp": datetime.utcnow(),
+                "timestamp": now,
                 "status": "sent",
-                "direction": "outgoing"
+                "direction": "outgoing",
+                "sent_at": now  # Set sent_at timestamp
             }
             
             # Store in database if we have the structure

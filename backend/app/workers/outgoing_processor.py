@@ -141,6 +141,7 @@ class OutgoingMessageProcessor:
                         # Extract content based on message type
                         content = self._extract_message_content(whatsapp_message_data)
                         
+                        now = datetime.utcnow()
                         message_data = {
                             "message_id": wa_message_id,
                             "from_phone": metadata.get("business_phone", "business"),
@@ -148,9 +149,10 @@ class OutgoingMessageProcessor:
                             "message_type": whatsapp_message_data.get("type", "text"),
                             "content": content,
                             "media_url": whatsapp_message_data.get("media_url"),
-                            "timestamp": datetime.utcnow(),
+                            "timestamp": now,
                             "status": "sent",
-                            "direction": "outgoing"
+                            "direction": "outgoing",
+                            "sent_at": now  # Set sent_at timestamp
                         }
                         
                         stored_message = message_repo.create_from_dict(message_data)

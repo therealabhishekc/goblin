@@ -412,12 +412,14 @@ async def process_status_update(
                     else:
                         logger.info(f"✅ Updated campaign recipient status: {recipient.phone_number} -> {status}")
             
-            # 2. Update whatsapp_messages table status
+            # 2. Update whatsapp_messages table status and timestamps
             whatsapp_message = db.query(WhatsAppMessage).filter(
                 WhatsAppMessage.message_id == message_id
             ).first()
             
             if whatsapp_message:
+                from datetime import datetime
+                
                 # Define status hierarchy: sent < delivered < read
                 status_hierarchy = {
                     "sent": 1,
@@ -433,6 +435,20 @@ async def process_status_update(
                 # Only update if new status is higher in hierarchy or is "failed"
                 if new_level >= current_level:
                     whatsapp_message.status = status
+                    
+                    # Update corresponding timestamp based on status
+                    now = datetime.utcnow()
+                    if status == "sent":
+                        whatsapp_message.sent_at = now
+                    elif status == "delivered":
+                        whatsapp_message.delivered_at = now
+                    elif status == "read":
+                        whatsapp_message.read_at = now
+                    elif status == "failed":
+                        whatsapp_message.failed_at = now
+                        if failure_reason:
+                            whatsapp_message.failed_reason = failure_reason
+                    
                     db.commit()
                     message_updated = True
                     logger.info(f"✅ Updated whatsapp_messages status: {message_id} -> {status}")
