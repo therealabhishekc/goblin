@@ -158,6 +158,15 @@ class OutgoingMessageProcessor:
                         
                         logger.info(f"📝 Outgoing message stored in database: {wa_message_id}")
                         
+                        # Update business metrics - increment responses sent
+                        try:
+                            from app.repositories.analytics_repository import AnalyticsRepository
+                            analytics_repo = AnalyticsRepository(db)
+                            analytics_repo.increment_responses_sent()
+                            logger.debug(f"📊 Business metrics updated: total_responses_sent incremented")
+                        except Exception as analytics_error:
+                            logger.error(f"❌ Failed to update business metrics: {analytics_error}")
+                        
                         # Update campaign recipient if this is a campaign message
                         if metadata.get("source") == "marketing_campaign" and metadata.get("recipient_id"):
                             try:
