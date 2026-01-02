@@ -101,18 +101,6 @@ class ReplyAutomation:
                 priority=10
             ),
             
-            # Business hours response
-            ReplyRule(
-                name="business_hours_closed",
-                condition="*",  # Always matches (will be filtered by business hours)
-                reply_type="template",
-                reply_data={
-                    "type": "text",
-                    "content": "Thank you for contacting us! 🕒 Our business hours are 9 AM - 5 PM (Mon-Fri). We'll respond to your message during business hours. For urgent matters, please call us directly."
-                },
-                priority=1
-            ),
-            
             # FAQ responses
             ReplyRule(
                 name="faq_hours",
@@ -224,10 +212,7 @@ class ReplyAutomation:
                 )
             
             # ⭐ FOR ALL OTHER RULES: Automated replies always sent regardless of subscription ⭐
-            # Check business hours for certain rules
-            if matching_rule.name == "business_hours_closed" and self.business_hours.is_business_hours():
-                logger.info("Business hours - skipping closed hours message")
-                return None
+            # Business hours check removed - automated replies work 24/7
             
             # Generate and send reply (NO SUBSCRIPTION CHECK HERE - replies always work)
             reply_message_id = await self._send_automated_reply(
