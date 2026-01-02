@@ -129,7 +129,11 @@ class WhatsAppService:
                 logger.warning(f"Failed to store sent message in database: {db_e}")
             
             # Update analytics
-            self.analytics_repo.increment_responses_sent()
+            try:
+                result = self.analytics_repo.increment_responses_sent()
+                logger.info(f"📊 Business metrics updated: total_responses_sent incremented to {result.total_responses_sent} for {result.date.date()}")
+            except Exception as analytics_error:
+                logger.error(f"❌ Failed to update business metrics: {analytics_error}", exc_info=True)
             
             logger.info(f"✅ Message sent successfully to {phone_number}")
             return True

@@ -162,10 +162,10 @@ class OutgoingMessageProcessor:
                         try:
                             from app.repositories.analytics_repository import AnalyticsRepository
                             analytics_repo = AnalyticsRepository(db)
-                            analytics_repo.increment_responses_sent()
-                            logger.debug(f"📊 Business metrics updated: total_responses_sent incremented")
+                            result = analytics_repo.increment_responses_sent()
+                            logger.info(f"📊 Business metrics updated: total_responses_sent incremented to {result.total_responses_sent} for {result.date.date()}")
                         except Exception as analytics_error:
-                            logger.error(f"❌ Failed to update business metrics: {analytics_error}")
+                            logger.error(f"❌ Failed to update business metrics: {analytics_error}", exc_info=True)
                         
                         # Update campaign recipient if this is a campaign message
                         if metadata.get("source") == "marketing_campaign" and metadata.get("recipient_id"):
