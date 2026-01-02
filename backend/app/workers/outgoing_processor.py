@@ -164,6 +164,12 @@ class OutgoingMessageProcessor:
                             analytics_repo = AnalyticsRepository(db)
                             result = analytics_repo.increment_responses_sent()
                             logger.info(f"📊 Business metrics updated: total_responses_sent incremented to {result.total_responses_sent} for {result.date.date()}")
+                            
+                            # Update response time average for today
+                            try:
+                                analytics_repo.update_response_time_avg()
+                            except Exception as response_time_error:
+                                logger.error(f"❌ Failed to update response time avg: {response_time_error}")
                         except Exception as analytics_error:
                             logger.error(f"❌ Failed to update business metrics: {analytics_error}", exc_info=True)
                         

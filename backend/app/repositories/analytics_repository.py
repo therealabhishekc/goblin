@@ -8,6 +8,7 @@ from sqlalchemy import func, desc, and_
 from .base_repository import BaseRepository
 from ..models.business import BusinessMetricsDB
 from ..models.business import BusinessMetrics
+from ..core.logging import logger
 
 class AnalyticsRepository(BaseRepository[BusinessMetrics]):
     """Repository for business analytics and metrics"""
@@ -111,6 +112,91 @@ class AnalyticsRepository(BaseRepository[BusinessMetrics]):
         
         self.db.commit()
         self.db.refresh(metrics)
+        return metrics
+    
+    def update_response_time_avg(self, date: datetime = None) -> BusinessMetricsDB:
+        """
+        Calculate and update average response time for a specific date.
+        
+        Logic:
+        1. Find all incoming messages for the day
+        2. For each incoming message, find the first outgoing response to the same phone number after it
+        3. Calculate time difference between incoming and outgoing messages
+        4. Average all response times for the day
+        5. Store in minutes (convert from seconds)
+        """
+        if not date:
+            date = datetime.utcnow()
+        
+        target_date = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        next_date = target_date + timedelta(days=1)
+        
+        from ..models.whatsapp import WhatsAppMessageDB
+        
+        # Get all incoming messages for the day
+        incoming_messages = self.db.query(WhatsAppMessageDB).filter(
+            and_(
+                WhatsAppMessageDB.direction == "incoming",
+                WhatsAppMessageDB.timestamp >= target_date,
+                WhatsAppMessageDB.timestamp < next_date
+            )
+        ).order_by(WhatsAppMessageDB.timestamp).all()
+        
+        if not incoming_messages:
+            logger.info(f"No incoming messages found for {target_date.date()}")
+            return self.get_metrics_by_date(target_date)
+        
+        response_times = []
+        
+        # For each incoming message, find the first outgoing response
+        for incoming_msg in incoming_messages:
+            # Find first outgoing message to the same phone number after this incoming message
+            outgoing_response = self.db.query(WhatsAppMessageDB).filter(
+                and_(
+                    WhatsAppMessageDB.direction == "outgoing",
+                    WhatsAppMessageDB.to_phone == incoming_msg.from_phone,
+                    WhatsAppMessageDB.timestamp > incoming_msg.timestamp,
+                    # Only consider responses within 24 hours to avoid skewing data
+                    WhatsAppMessageDB.timestamp < incoming_msg.timestamp + timedelta(hours=24)
+                )
+            ).order_by(WhatsAppMessageDB.timestamp).first()
+            
+            if outgoing_response:
+                # Calculate response time in seconds
+                time_diff = (outgoing_response.timestamp - incoming_msg.timestamp).total_seconds()
+                response_times.append(time_diff)
+        
+        if not response_times:
+            logger.info(f"No response times found for {target_date.date()}")
+            return self.get_metrics_by_date(target_date)
+        
+        # Calculate average response time in seconds
+        avg_response_time_seconds = sum(response_times) / len(response_times)
+        
+        # Update or create metrics record
+        metrics = self.get_metrics_by_date(target_date)
+        if not metrics:
+            metrics = BusinessMetricsDB(
+                date=target_date,
+                total_messages_received=0,
+                total_responses_sent=0,
+                unique_users=0,
+                response_time_avg_seconds=avg_response_time_seconds
+            )
+            self.db.add(metrics)
+        else:
+            metrics.response_time_avg_seconds = avg_response_time_seconds
+        
+        self.db.commit()
+        self.db.refresh(metrics)
+        
+        avg_minutes = avg_response_time_seconds / 60
+        logger.info(
+            f"✅ Updated response time avg for {target_date.date()}: "
+            f"{avg_response_time_seconds:.2f}s ({avg_minutes:.2f} minutes) "
+            f"based on {len(response_times)} conversation pairs"
+        )
+        
         return metrics
     
     def get_total_metrics_summary(self) -> Dict[str, int]:
