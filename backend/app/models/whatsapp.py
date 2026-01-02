@@ -119,7 +119,7 @@ class WhatsAppMessageDB(Base):
     failed_at = Column(DateTime)
     
     # Failure tracking
-    failed_reason = Column(Text)
+    failure_reason = Column(Text)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

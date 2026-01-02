@@ -447,7 +447,7 @@ async def process_status_update(
                     elif status == "failed":
                         whatsapp_message.failed_at = now
                         if failure_reason:
-                            whatsapp_message.failed_reason = failure_reason
+                            whatsapp_message.failure_reason = failure_reason
                     
                     db.commit()
                     message_updated = True
