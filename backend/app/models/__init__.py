@@ -5,3 +5,4 @@ Data models for the WhatsApp Business API.
 from .whatsapp import *
 from .user import *
 from .business import *
+from .conversation import *

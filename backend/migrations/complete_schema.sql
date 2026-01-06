@@ -498,7 +498,94 @@ SELECT 'marketing_campaigns' as table_name, COUNT(*) as row_count FROM marketing
 UNION ALL
 SELECT 'campaign_recipients' as table_name, COUNT(*) as row_count FROM campaign_recipients
 UNION ALL
-SELECT 'campaign_send_schedule' as table_name, COUNT(*) as row_count FROM campaign_send_schedule;
+SELECT 'campaign_send_schedule' as table_name, COUNT(*) as row_count FROM campaign_send_schedule
+UNION ALL
+SELECT 'conversation_state' as table_name, COUNT(*) as row_count FROM conversation_state
+UNION ALL
+SELECT 'workflow_templates' as table_name, COUNT(*) as row_count FROM workflow_templates;
+
+-- =============================================================================
+-- SECTION 11: CONVERSATION STATE AND WORKFLOW TEMPLATES
+-- =============================================================================
+
+-- Conversation State Table - Tracks active conversation flows
+CREATE TABLE IF NOT EXISTS conversation_state (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Customer identification
+    phone_number VARCHAR(20) NOT NULL,
+    
+    -- Flow tracking
+    conversation_flow VARCHAR(50) NOT NULL,  -- Template name (e.g., 'main_menu', 'new_order')
+    current_step VARCHAR(50) NOT NULL,       -- Current step in flow (e.g., 'initial', 'product_selection')
+    
+    -- Context data (stores user selections, inputs, etc.)
+    context JSONB DEFAULT '{}',
+    
+    -- Timing
+    last_interaction TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,                     -- Auto-expire old conversations
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Workflow Templates Table - Stores reusable interactive menu templates
+CREATE TABLE IF NOT EXISTS workflow_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Template identification
+    template_name VARCHAR(100) UNIQUE NOT NULL,
+    template_type VARCHAR(20) NOT NULL,      -- 'button', 'list', 'text'
+    
+    -- Triggers (keywords that activate this template)
+    trigger_keywords TEXT[],
+    
+    -- Menu structure (full menu definition)
+    menu_structure JSONB NOT NULL,
+    
+    -- Status
+    is_active BOOLEAN DEFAULT TRUE,
+    
+    -- Timestamps
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Indexes for conversation_state
+CREATE INDEX IF NOT EXISTS idx_conversation_phone ON conversation_state(phone_number);
+CREATE INDEX IF NOT EXISTS idx_conversation_flow ON conversation_state(conversation_flow);
+CREATE INDEX IF NOT EXISTS idx_conversation_expires ON conversation_state(expires_at);
+
+-- Indexes for workflow_templates
+CREATE INDEX IF NOT EXISTS idx_workflow_templates_name ON workflow_templates(template_name);
+CREATE INDEX IF NOT EXISTS idx_workflow_templates_active ON workflow_templates(is_active);
+
+-- Comments for documentation
+COMMENT ON TABLE conversation_state IS 
+'Tracks active conversation flows and user context. Only ONE active conversation per customer at any time.';
+
+COMMENT ON TABLE workflow_templates IS 
+'Stores reusable interactive menu templates (the menu cards shown to customers).';
+
+COMMENT ON COLUMN conversation_state.conversation_flow IS 
+'Template name/flow identifier (e.g., main_menu, new_order, support). This is what template is being used.';
+
+COMMENT ON COLUMN conversation_state.current_step IS 
+'Current step within the flow (e.g., initial, product_selection, quantity_input). This is where the user is in the template.';
+
+-- =============================================================================
+-- SECTION 12: GRANT PERMISSIONS FOR CONVERSATION TABLES
+-- =============================================================================
+
+DO $$ 
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'app_user') THEN
+        GRANT ALL PRIVILEGES ON conversation_state TO app_user;
+        GRANT ALL PRIVILEGES ON workflow_templates TO app_user;
+    END IF;
+END $$;
 
 -- =============================================================================
 -- MIGRATION COMPLETE!
@@ -506,15 +593,18 @@ SELECT 'campaign_send_schedule' as table_name, COUNT(*) as row_count FROM campai
 -- All tables, columns, indexes, constraints, functions, triggers, and views
 -- have been created/updated.
 -- 
--- Total Tables: 7
+-- Total Tables: 9
 --   Core Tables (3):
 --     - user_profiles
 --     - whatsapp_messages
 --     - business_metrics
---   Marketing Campaign Tables (4):
+--   Marketing Campaign Tables (3):
 --     - marketing_campaigns
 --     - campaign_recipients
 --     - campaign_send_schedule
+--   Conversation Tables (2):
+--     - conversation_state
+--     - workflow_templates
 -- 
 -- Run verification queries above to ensure everything is working correctly.
 -- =============================================================================
