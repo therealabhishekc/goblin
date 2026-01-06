@@ -55,8 +55,19 @@ CREATE TABLE IF NOT EXISTS whatsapp_messages (
     media_type VARCHAR(50),
     media_size INTEGER,
     status VARCHAR(20) DEFAULT 'processing',
+
+    -- Status timestamps (for tracking message lifecycle)
+    sent_at TIMESTAMP,
+    delivered_at TIMESTAMP,
+    read_at TIMESTAMP,
+    failed_at TIMESTAMP,
+    
+    -- Failure tracking
+    failure_reason TEXT,
+    
     direction VARCHAR(20) DEFAULT 'incoming',
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT check_direction CHECK (direction IN ('incoming', 'outgoing')),
