@@ -27,6 +27,23 @@ class InteractiveMessageHandler:
         Returns:
             Processing result
         """
+        # First check if this text matches any trigger keyword
+        # This allows users to restart conversations by typing trigger words
+        template = self.conv_service.find_template_by_keyword(text)
+        
+        if template:
+            # User typed a trigger keyword - start/restart that conversation
+            logger.info(f"🎯 Trigger keyword '{text}' matched template '{template.template_name}'")
+            
+            # End any existing conversation
+            conversation = self.conv_service.get_conversation(phone_number)
+            if conversation:
+                logger.info(f"🔄 Ending existing conversation to start new one")
+                self.conv_service.end_conversation(phone_number)
+            
+            # Start new conversation
+            return await self._start_new_conversation(phone_number, text)
+        
         # Check if user has active conversation
         conversation = self.conv_service.get_conversation(phone_number)
         
@@ -34,8 +51,9 @@ class InteractiveMessageHandler:
             # Continue existing conversation
             return await self._continue_conversation(phone_number, text, conversation)
         else:
-            # Try to match keyword and start new conversation
-            return await self._start_new_conversation(phone_number, text)
+            # No conversation and no keyword match
+            logger.info(f"📭 No template or conversation for: '{text}'")
+            return {"status": "no_match"}
     
     async def handle_interactive_message(
         self,
@@ -89,14 +107,31 @@ class InteractiveMessageHandler:
             template_name=template.template_name
         )
         
-        logger.info(f"🗣️ Conversation started for {phone_number}, sending menu...")
+        logger.info(f"🗣️ Conversation started for {phone_number}, sending initial message...")
         
-        # Send initial menu
+        # Send initial menu/message
         try:
-            await self._send_menu(phone_number, template.menu_structure)
-            logger.info(f"✅ Menu sent successfully to {phone_number}")
+            # Check if template has a menu to send
+            menu_type = template.menu_structure.get("type")
+            
+            if menu_type in ["button", "list"]:
+                # Send interactive menu
+                await self._send_menu(phone_number, template.menu_structure)
+                logger.info(f"✅ Interactive menu sent successfully to {phone_number}")
+            else:
+                # Send text message
+                body_text = template.menu_structure.get("body", {}).get("text", "")
+                if body_text:
+                    await send_whatsapp_message(
+                        phone_number,
+                        {"type": "text", "content": body_text}
+                    )
+                    logger.info(f"✅ Text message sent successfully to {phone_number}")
+                
         except Exception as e:
-            logger.error(f"❌ Failed to send menu: {e}", exc_info=True)
+            logger.error(f"❌ Failed to send initial message: {e}", exc_info=True)
+            # Clean up the conversation since we couldn't send the menu
+            self.conv_service.end_conversation(phone_number)
             raise
         
         return {
@@ -202,6 +237,7 @@ class InteractiveMessageHandler:
         
         template = self.conv_service.get_template(conversation.conversation_flow)
         if not template:
+            logger.error(f"❌ Template not found: {conversation.conversation_flow}")
             return {"status": "error"}
         
         # Get step definition
@@ -211,33 +247,58 @@ class InteractiveMessageHandler:
         # Determine next step based on selection
         next_steps = current_step_def.get("next_steps", {})
         
-        if selection_id in next_steps:
-            # Switch template if needed
-            next_value = next_steps[selection_id]
-            
-            if next_value.endswith("_flow"):
-                # Start a different flow
-                template_name = next_value.replace("_flow", "")
-                self.conv_service.update_conversation(
-                    phone_number=phone_number,
-                    new_template=template_name,
-                    current_step="initial",
-                    context_update={"previous_selection": selection_id}
-                )
-                
-                # Send new menu
-                new_template = self.conv_service.get_template(template_name)
-                if new_template:
-                    await self._send_menu(phone_number, new_template.menu_structure)
-            else:
-                # Move to next step in current flow
-                self.conv_service.update_conversation(
-                    phone_number=phone_number,
-                    current_step=next_value,
-                    context_update={"selection": selection_id}
-                )
+        logger.info(f"🔘 Processing selection '{selection_id}' at step '{conversation.current_step}'")
+        logger.debug(f"Available next_steps: {next_steps}")
         
-        return {"status": "selection_processed"}
+        if selection_id not in next_steps:
+            logger.warning(f"⚠️ Selection '{selection_id}' not found in next_steps")
+            return {"status": "invalid_selection"}
+        
+        next_value = next_steps[selection_id]
+        logger.info(f"🎯 Next destination: {next_value}")
+        
+        # Check if this is a switch to another template
+        # If next_value matches a template name, start that template
+        next_template = self.conv_service.get_template(next_value)
+        
+        if next_template:
+            # Switch to new template flow
+            logger.info(f"🔄 Switching to template: {next_value}")
+            self.conv_service.end_conversation(phone_number)
+            
+            # Start new conversation with the target template
+            new_conversation = self.conv_service.start_conversation(
+                phone_number=phone_number,
+                template_name=next_value
+            )
+            
+            # Send the new template's menu
+            await self._send_menu(phone_number, next_template.menu_structure)
+            
+            return {
+                "status": "template_switched",
+                "new_template": next_value
+            }
+        else:
+            # Move to next step within current template
+            logger.info(f"➡️ Moving to step: {next_value}")
+            self.conv_service.update_conversation(
+                phone_number=phone_number,
+                current_step=next_value,
+                context_update={"selection": selection_id}
+            )
+            
+            # Get next step definition and send appropriate message
+            next_step_def = steps.get(next_value, {})
+            
+            if "prompt" in next_step_def:
+                prompt = next_step_def["prompt"]
+                await send_whatsapp_message(
+                    phone_number,
+                    {"type": "text", "content": prompt}
+                )
+            
+            return {"status": "step_advanced", "next_step": next_value}
     
     async def _send_menu(self, phone_number: str, menu_structure: Dict[str, Any]):
         """Send WhatsApp interactive menu"""
@@ -248,33 +309,45 @@ class InteractiveMessageHandler:
         
         if menu_type == "button":
             # Send button message
+            body_text = menu_structure.get("body", {}).get("text", "Please select an option")
+            action = menu_structure.get("action", {})
+            
             message = {
                 "type": "interactive",
                 "interactive": {
                     "type": "button",
-                    "body": menu_structure.get("body"),
-                    "action": menu_structure.get("action")
+                    "body": {"text": body_text},
+                    "action": action
                 }
             }
-            logger.info(f"📋 Sending button message with {len(menu_structure.get('action', {}).get('buttons', []))} buttons")
+            logger.info(f"📋 Sending button message with {len(action.get('buttons', []))} buttons")
+            logger.debug(f"Button message: {message}")
+            
         elif menu_type == "list":
             # Send list message
+            body_text = menu_structure.get("body", {}).get("text", "Please select an option")
+            action = menu_structure.get("action", {})
+            
             message = {
                 "type": "interactive",
                 "interactive": {
                     "type": "list",
-                    "body": menu_structure.get("body"),
-                    "action": menu_structure.get("action")
+                    "body": {"text": body_text},
+                    "action": action
                 }
             }
             logger.info(f"📋 Sending list message")
+            logger.debug(f"List message: {message}")
+            
         else:
             # Send text message
+            text_content = menu_structure.get("body", {}).get("text", "Menu")
             message = {
                 "type": "text",
-                "content": menu_structure.get("body", {}).get("text", "Menu")
+                "content": text_content
             }
             logger.info(f"📋 Sending text message")
+            logger.debug(f"Text message: {message}")
         
         logger.info(f"🚀 Calling send_whatsapp_message for {phone_number}")
         result = await send_whatsapp_message(phone_number, message)
