@@ -5,6 +5,7 @@ import { ThemeProvider } from './contexts/ThemeContext';
 import Layout from './components/Layout';
 import Dashboard from './pages/Dashboard';
 import Settings from './pages/Settings';
+import TemplateManagement from './pages/templates/TemplateManagement';
 import './styles/glassmorphism.css';
 
 function App() {
@@ -41,6 +42,14 @@ function App() {
                   <h1 className="text-gradient">Campaigns</h1>
                   <p>Campaigns page coming soon...</p>
                 </div>
+              </Layout>
+            }
+          />
+          <Route
+            path="/templates"
+            element={
+              <Layout>
+                <TemplateManagement />
               </Layout>
             }
           />

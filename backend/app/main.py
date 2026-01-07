@@ -39,6 +39,10 @@ try:
     from app.api import analytics
 except ImportError:
     analytics = None
+try:
+    from app.api import templates
+except ImportError:
+    templates = None
 
 # SQS Workers
 try:
@@ -209,6 +213,14 @@ if analytics:
         logger.info("✅ Analytics API endpoints loaded")
     except Exception as e:
         logger.warning(f"⚠️  Analytics API endpoints failed to load: {e}")
+
+# Include templates router if available
+if templates:
+    try:
+        app.include_router(templates.router)
+        logger.info("✅ Templates API endpoints loaded")
+    except Exception as e:
+        logger.warning(f"⚠️  Templates API endpoints failed to load: {e}")
 
 # Include other routers if available
 try:

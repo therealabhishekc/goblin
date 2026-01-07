@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { 
   FiHome, FiMessageSquare, FiUsers, FiBarChart2, 
-  FiSettings, FiTarget, FiArchive, FiLogOut 
+  FiSettings, FiTarget, FiArchive, FiLogOut, FiLayout
 } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Layout.css';
@@ -15,6 +15,7 @@ const Layout = ({ children }) => {
     { icon: FiHome, label: 'Dashboard', path: '/dashboard' },
     { icon: FiMessageSquare, label: 'Messages', path: '/messages' },
     { icon: FiTarget, label: 'Campaigns', path: '/campaigns' },
+    { icon: FiLayout, label: 'Templates', path: '/templates' },
     { icon: FiUsers, label: 'Users', path: '/users' },
     { icon: FiSettings, label: 'Settings', path: '/settings' },
   ];

@@ -75,6 +75,15 @@ export const apiService = {
   // Monitoring
   getHealthMetrics: () => api.get(config.endpoints.monitoring.health),
   getSystemMetrics: () => api.get(config.endpoints.monitoring.metrics),
+  
+  // Templates
+  getTemplates: (params) => api.get('/templates', { params }),
+  getTemplateById: (id) => api.get(`/templates/${id}`),
+  getTemplateByName: (name) => api.get(`/templates/name/${name}`),
+  createTemplate: (data) => api.post('/templates', data),
+  updateTemplate: (id, data) => api.put(`/templates/${id}`, data),
+  deleteTemplate: (id) => api.delete(`/templates/${id}`),
+  toggleTemplateStatus: (id) => api.post(`/templates/${id}/toggle`),
 };
 
 export default api;

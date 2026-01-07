@@ -1,6 +1,6 @@
 // API Configuration
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-const WS_BASE_URL = process.env.REACT_APP_WS_URL || 'ws://localhost:8000';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://2hdfnnus3x.us-east-1.awsapprunner.com';
+const WS_BASE_URL = process.env.REACT_APP_WS_URL || 'wss://2hdfnnus3x.us-east-1.awsapprunner.com';
 
 export const config = {
   apiUrl: API_BASE_URL,
