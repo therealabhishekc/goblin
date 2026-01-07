@@ -175,8 +175,11 @@ class WhatsAppService:
             from app.services.message_handler import InteractiveMessageHandler
             
             try:
+                logger.info(f"🔍 Checking for interactive conversation for: {phone_number}, text: {text_content}")
                 handler = InteractiveMessageHandler(self.db)
                 interactive_result = await handler.handle_text_message(phone_number, text_content)
+                
+                logger.info(f"📊 Interactive handler result: {interactive_result}")
                 
                 if interactive_result["status"] in ["conversation_started", "step_advanced", "conversation_completed"]:
                     # Interactive conversation handled successfully
@@ -188,8 +191,11 @@ class WhatsAppService:
                         "interactive_status": interactive_result["status"],
                         "user_id": str(user.id) if user else None
                     }
+                else:
+                    logger.info(f"📭 Interactive handler returned '{interactive_result['status']}', falling back to auto-reply")
             except Exception as interactive_error:
-                logger.warning(f"⚠️ Interactive handler error: {interactive_error}, falling back to auto-reply")
+                logger.error(f"❌ Interactive handler error: {interactive_error}", exc_info=True)
+                logger.warning(f"⚠️ Falling back to auto-reply due to error")
             
             # Fall back to auto-reply if no interactive conversation
             reply_message_id = await self._process_automated_reply_direct(

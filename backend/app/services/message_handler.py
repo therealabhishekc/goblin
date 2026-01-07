@@ -72,12 +72,16 @@ class InteractiveMessageHandler:
     ) -> Dict[str, Any]:
         """Start a new conversation based on keyword"""
         
+        logger.info(f"🔎 Looking for template matching text: '{text}'")
+        
         # Find matching template
         template = self.conv_service.find_template_by_keyword(text)
         
         if not template:
-            logger.info(f"📭 No template matched for: {text}")
+            logger.info(f"📭 No template matched for: '{text}'")
             return {"status": "no_match"}
+        
+        logger.info(f"✅ Found template: {template.template_name}")
         
         # Start conversation
         conversation = self.conv_service.start_conversation(
@@ -85,8 +89,15 @@ class InteractiveMessageHandler:
             template_name=template.template_name
         )
         
+        logger.info(f"🗣️ Conversation started for {phone_number}, sending menu...")
+        
         # Send initial menu
-        await self._send_menu(phone_number, template.menu_structure)
+        try:
+            await self._send_menu(phone_number, template.menu_structure)
+            logger.info(f"✅ Menu sent successfully to {phone_number}")
+        except Exception as e:
+            logger.error(f"❌ Failed to send menu: {e}", exc_info=True)
+            raise
         
         return {
             "status": "conversation_started",
@@ -210,6 +221,8 @@ class InteractiveMessageHandler:
     async def _send_menu(self, phone_number: str, menu_structure: Dict[str, Any]):
         """Send WhatsApp interactive menu"""
         
+        logger.info(f"📤 Preparing to send menu to {phone_number}, type: {menu_structure.get('type')}")
+        
         menu_type = menu_structure.get("type")
         
         if menu_type == "button":
@@ -222,6 +235,7 @@ class InteractiveMessageHandler:
                     "action": menu_structure.get("action")
                 }
             }
+            logger.info(f"📋 Sending button message with {len(menu_structure.get('action', {}).get('buttons', []))} buttons")
         elif menu_type == "list":
             # Send list message
             message = {
@@ -232,14 +246,18 @@ class InteractiveMessageHandler:
                     "action": menu_structure.get("action")
                 }
             }
+            logger.info(f"📋 Sending list message")
         else:
             # Send text message
             message = {
                 "type": "text",
                 "text": {"body": menu_structure.get("body", {}).get("text", "Menu")}
             }
+            logger.info(f"📋 Sending text message")
         
-        await send_whatsapp_message(phone_number, message)
+        logger.info(f"🚀 Calling send_whatsapp_message for {phone_number}")
+        result = await send_whatsapp_message(phone_number, message)
+        logger.info(f"✅ send_whatsapp_message returned: {result}")
     
     def _format_prompt(self, prompt: str, context: Dict[str, Any]) -> str:
         """Replace placeholders in prompt with context values"""

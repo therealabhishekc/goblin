@@ -307,6 +307,74 @@ async def send_location_message(to: str, latitude: float, longitude: float, name
         logger.error(f"❌ Failed to send location message to {to}: {e}")
         raise
 
+async def send_interactive_message(to: str, interactive_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Send a WhatsApp interactive message (buttons or lists)
+    
+    Args:
+        to: Recipient phone number
+        interactive_data: Interactive message structure
+            For buttons: {
+                "type": "button",
+                "body": {"text": "Body text"},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": "id1", "title": "Button 1"}},
+                        ...
+                    ]
+                }
+            }
+            For lists: {
+                "type": "list",
+                "body": {"text": "Body text"},
+                "action": {
+                    "button": "Button text",
+                    "sections": [
+                        {
+                            "title": "Section 1",
+                            "rows": [
+                                {"id": "id1", "title": "Option 1", "description": "Description"}
+                            ]
+                        }
+                    ]
+                }
+            }
+    
+    Returns:
+        WhatsApp API response
+    """
+    _validate_whatsapp_config()
+    
+    url = _get_whatsapp_api_url()
+    headers = {
+        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "messaging_product": "whatsapp",
+        "recipient_type": "individual",
+        "to": to,
+        "type": "interactive",
+        "interactive": interactive_data
+    }
+    
+    try:
+        logger.info(f"📤 Sending interactive message to {to}, type: {interactive_data.get('type')}")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            message_id = result.get('messages', [{}])[0].get('id', 'unknown_id')
+            logger.info(f"✅ Interactive message sent to {to}: {message_id}")
+            return result
+    except httpx.HTTPStatusError as e:
+        logger.error(f"❌ HTTP error sending interactive message to {to}: {e.response.status_code} - {e.response.text}")
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to send interactive message to {to}: {e}")
+        raise
+
 async def send_whatsapp_message(to: str, message_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Universal message sender - routes to appropriate function based on message type
@@ -378,6 +446,14 @@ async def send_whatsapp_message(to: str, message_data: Dict[str, Any]) -> Dict[s
                 components=components,
                 parameters=parameters
             )
+            
+        elif message_type == "interactive":
+            # Interactive message (buttons or lists)
+            interactive_data = message_data.get("interactive")
+            if not interactive_data:
+                raise ValueError("Interactive data is required for interactive messages")
+            
+            return await send_interactive_message(to, interactive_data)
             
         else:
             raise ValueError(f"Unsupported message type: {message_type}")
