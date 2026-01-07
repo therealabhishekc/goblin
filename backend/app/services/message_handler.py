@@ -133,7 +133,7 @@ class InteractiveMessageHandler:
             logger.warning(f"⚠️ Text received but button/list selection expected at step {conversation.current_step}")
             await send_whatsapp_message(
                 phone_number,
-                {"type": "text", "text": {"body": "Please select one of the options from the menu above."}}
+                {"type": "text", "content": "Please select one of the options from the menu above."}
             )
             return {"status": "awaiting_selection"}
         
@@ -146,7 +146,7 @@ class InteractiveMessageHandler:
             except ValueError:
                 await send_whatsapp_message(
                     phone_number,
-                    {"type": "text", "text": {"body": "❌ Please enter a valid number"}}
+                    {"type": "text", "content": "❌ Please enter a valid number"}
                 )
                 return {"status": "invalid_input"}
         
@@ -161,7 +161,7 @@ class InteractiveMessageHandler:
             # End conversation gracefully
             await send_whatsapp_message(
                 phone_number,
-                {"type": "text", "text": {"body": "Thank you! Type 'menu' to return to the main menu."}}
+                {"type": "text", "content": "Thank you! Type 'menu' to return to the main menu."}
             )
             self.conv_service.end_conversation(phone_number)
             return {"status": "conversation_ended"}
@@ -182,7 +182,7 @@ class InteractiveMessageHandler:
         
         await send_whatsapp_message(
             phone_number,
-            {"type": "text", "text": {"body": prompt}}
+            {"type": "text", "content": prompt}
         )
         
         # Check if conversation should end
@@ -272,7 +272,7 @@ class InteractiveMessageHandler:
             # Send text message
             message = {
                 "type": "text",
-                "text": {"body": menu_structure.get("body", {}).get("text", "Menu")}
+                "content": menu_structure.get("body", {}).get("text", "Menu")
             }
             logger.info(f"📋 Sending text message")
         
