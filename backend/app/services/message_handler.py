@@ -122,6 +122,21 @@ class InteractiveMessageHandler:
         steps = template.menu_structure.get("steps", {})
         current_step_def = steps.get(conversation.current_step, {})
         
+        # Check if user wants to return to main menu
+        if text.lower().strip() in ["menu", "main menu", "back"]:
+            # End current conversation and start main menu
+            self.conv_service.end_conversation(phone_number)
+            return await self._start_new_conversation(phone_number, "hi")
+        
+        # Check if this step has next_steps (button/list selection expected, not text)
+        if "next_steps" in current_step_def:
+            logger.warning(f"⚠️ Text received but button/list selection expected at step {conversation.current_step}")
+            await send_whatsapp_message(
+                phone_number,
+                {"type": "text", "text": {"body": "Please select one of the options from the menu above."}}
+            )
+            return {"status": "awaiting_selection"}
+        
         # Validate input if needed
         if current_step_def.get("validation") == "number":
             try:
@@ -142,8 +157,14 @@ class InteractiveMessageHandler:
         # Move to next step
         next_step = current_step_def.get("next_step")
         if not next_step:
-            logger.error(f"❌ No next step defined for {conversation.current_step}")
-            return {"status": "error"}
+            logger.warning(f"⚠️ No next step defined for {conversation.current_step}, ending conversation")
+            # End conversation gracefully
+            await send_whatsapp_message(
+                phone_number,
+                {"type": "text", "text": {"body": "Thank you! Type 'menu' to return to the main menu."}}
+            )
+            self.conv_service.end_conversation(phone_number)
+            return {"status": "conversation_ended"}
         
         # Update conversation
         self.conv_service.update_conversation(
