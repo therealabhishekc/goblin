@@ -312,13 +312,25 @@ class InteractiveMessageHandler:
             body_text = menu_structure.get("body", {}).get("text", "Please select an option")
             action = menu_structure.get("action", {})
             
+            interactive_payload = {
+                "type": "button",
+                "body": {"text": body_text},
+                "action": action
+            }
+            
+            # Add header if present
+            if "header" in menu_structure:
+                interactive_payload["header"] = menu_structure["header"]
+                logger.debug(f"Added header: {menu_structure['header']}")
+            
+            # Add footer if present
+            if "footer" in menu_structure:
+                interactive_payload["footer"] = menu_structure["footer"]
+                logger.debug(f"Added footer: {menu_structure['footer']}")
+            
             message = {
                 "type": "interactive",
-                "interactive": {
-                    "type": "button",
-                    "body": {"text": body_text},
-                    "action": action
-                }
+                "interactive": interactive_payload
             }
             logger.info(f"📋 Sending button message with {len(action.get('buttons', []))} buttons")
             logger.debug(f"Button message: {message}")
@@ -328,13 +340,25 @@ class InteractiveMessageHandler:
             body_text = menu_structure.get("body", {}).get("text", "Please select an option")
             action = menu_structure.get("action", {})
             
+            interactive_payload = {
+                "type": "list",
+                "body": {"text": body_text},
+                "action": action
+            }
+            
+            # Add header if present
+            if "header" in menu_structure:
+                interactive_payload["header"] = menu_structure["header"]
+                logger.debug(f"Added header: {menu_structure['header']}")
+            
+            # Add footer if present
+            if "footer" in menu_structure:
+                interactive_payload["footer"] = menu_structure["footer"]
+                logger.debug(f"Added footer: {menu_structure['footer']}")
+            
             message = {
                 "type": "interactive",
-                "interactive": {
-                    "type": "list",
-                    "body": {"text": body_text},
-                    "action": action
-                }
+                "interactive": interactive_payload
             }
             logger.info(f"📋 Sending list message")
             logger.debug(f"List message: {message}")
