@@ -171,7 +171,27 @@ class WhatsAppService:
             # Update user interaction
             self.user_repo.update_last_interaction(phone_number)
             
-            # Process automated replies
+            # Check for interactive conversation first
+            from app.services.message_handler import InteractiveMessageHandler
+            
+            try:
+                handler = InteractiveMessageHandler(self.db)
+                interactive_result = await handler.handle_text_message(phone_number, text_content)
+                
+                if interactive_result["status"] in ["conversation_started", "step_advanced", "conversation_completed"]:
+                    # Interactive conversation handled successfully
+                    logger.info(f"🔀 Interactive conversation handled: {interactive_result['status']}")
+                    return {
+                        "status": "success",
+                        "message_stored": True,
+                        "interactive": True,
+                        "interactive_status": interactive_result["status"],
+                        "user_id": str(user.id) if user else None
+                    }
+            except Exception as interactive_error:
+                logger.warning(f"⚠️ Interactive handler error: {interactive_error}, falling back to auto-reply")
+            
+            # Fall back to auto-reply if no interactive conversation
             reply_message_id = await self._process_automated_reply_direct(
                 phone_number=phone_number,
                 message_text=text_content,
@@ -225,11 +245,31 @@ class WhatsAppService:
             # Update user interaction
             self.user_repo.update_last_interaction(phone_number)
             
-            return {
-                "status": "success",
-                "message_stored": True,
-                "user_id": str(user.id) if user else None
-            }
+            # Handle interactive button/list response
+            from app.services.message_handler import InteractiveMessageHandler
+            
+            try:
+                handler = InteractiveMessageHandler(self.db)
+                interactive_result = await handler.handle_interactive_message(phone_number, interactive_data)
+                
+                logger.info(f"🔘 Interactive selection processed: {interactive_result['status']}")
+                
+                return {
+                    "status": "success",
+                    "message_stored": True,
+                    "interactive_processed": True,
+                    "interactive_status": interactive_result["status"],
+                    "user_id": str(user.id) if user else None
+                }
+            except Exception as interactive_error:
+                logger.error(f"❌ Interactive handler error: {interactive_error}")
+                return {
+                    "status": "success",
+                    "message_stored": True,
+                    "interactive_processed": False,
+                    "error": str(interactive_error),
+                    "user_id": str(user.id) if user else None
+                }
             
         except Exception as e:
             logger.error(f"❌ Error processing interactive message from {phone_number}: {e}")
