@@ -3,6 +3,7 @@ Interactive Message Handler
 Processes user messages and manages conversation flows
 """
 from typing import Dict, Any, Optional
+from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.services.conversation_service import ConversationService
@@ -264,13 +265,39 @@ class InteractiveMessageHandler:
         if next_template:
             # Switch to new template flow
             logger.info(f"🔄 Switching to template: {next_value}")
+            
+            # Try to find button title from current template
+            button_title = None
+            current_buttons = template.menu_structure.get("action", {}).get("buttons", [])
+            for btn in current_buttons:
+                if btn.get("reply", {}).get("id") == selection_id:
+                    button_title = btn.get("reply", {}).get("title")
+                    break
+            
+            # Build context with selection info
+            new_context = {
+                "selection_id": selection_id,
+                "selection_title": button_title,
+                "previous_template": conversation.conversation_flow,
+                "previous_step": conversation.current_step,
+                "selection_timestamp": datetime.utcnow().isoformat()
+            }
+            
+            # Preserve any existing context data
+            if conversation.context:
+                new_context["previous_context"] = conversation.context
+            
+            # End old conversation
             self.conv_service.end_conversation(phone_number)
             
-            # Start new conversation with the target template
+            # Start new conversation with context
             new_conversation = self.conv_service.start_conversation(
                 phone_number=phone_number,
-                template_name=next_value
+                template_name=next_value,
+                context=new_context
             )
+            
+            logger.info(f"📝 Context preserved: {new_context}")
             
             # Send the new template's menu
             await self._send_menu(phone_number, next_template.menu_structure)
