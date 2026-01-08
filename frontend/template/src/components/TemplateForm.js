@@ -16,6 +16,12 @@ function TemplateForm({ template, onSubmit, onCancel }) {
       body_text: '',
       footer_text: '',
       buttons: []
+    },
+    steps: {
+      initial: {
+        prompt: '',
+        next_steps: {}
+      }
     }
   });
   const [errors, setErrors] = useState({});
@@ -36,6 +42,7 @@ function TemplateForm({ template, onSubmit, onCancel }) {
       const bodyText = menuStruct.body?.text || '';
       const footerText = menuStruct.footer?.text || '';
       const buttons = menuStruct.action?.buttons || [];
+      const steps = menuStruct.steps || { initial: { prompt: bodyText, next_steps: {} } };
       
       setFormData({
         template_name: template.template_name || '',
@@ -51,7 +58,8 @@ function TemplateForm({ template, onSubmit, onCancel }) {
           body_text: bodyText,
           footer_text: footerText,
           buttons: buttons
-        }
+        },
+        steps: steps
       });
     }
   }, [template]);
@@ -76,10 +84,55 @@ function TemplateForm({ template, onSubmit, onCancel }) {
 
   const handleButtonChange = (index, field, value) => {
     const newButtons = [...formData.menu_structure.buttons];
-    newButtons[index] = {
-      ...newButtons[index],
-      [field]: value
-    };
+    
+    // If changing the reply ID, update the next_steps mapping
+    if (field === 'reply.id') {
+      const oldId = newButtons[index]?.reply?.id;
+      const newId = value;
+      
+      // Update button
+      newButtons[index] = {
+        ...newButtons[index],
+        reply: {
+          ...newButtons[index].reply,
+          id: newId
+        }
+      };
+      
+      // Update next_steps mapping if old ID existed
+      if (oldId && formData.steps?.initial?.next_steps?.[oldId]) {
+        const nextSteps = { ...formData.steps.initial.next_steps };
+        const targetStep = nextSteps[oldId];
+        delete nextSteps[oldId];
+        if (newId) {
+          nextSteps[newId] = targetStep;
+        }
+        setFormData(prev => ({
+          ...prev,
+          steps: {
+            ...prev.steps,
+            initial: {
+              ...prev.steps.initial,
+              next_steps: nextSteps
+            }
+          }
+        }));
+      }
+    } else if (field === 'reply.title') {
+      newButtons[index] = {
+        ...newButtons[index],
+        reply: {
+          ...newButtons[index].reply,
+          title: value
+        }
+      };
+    } else {
+      newButtons[index] = {
+        ...newButtons[index],
+        [field]: value
+      };
+    }
+    
     handleMenuStructureChange('buttons', newButtons);
   };
 
@@ -90,8 +143,57 @@ function TemplateForm({ template, onSubmit, onCancel }) {
   };
 
   const removeButton = (index) => {
+    const buttonToRemove = formData.menu_structure.buttons[index];
+    const buttonId = buttonToRemove?.reply?.id;
+    
+    // Remove button
     const newButtons = formData.menu_structure.buttons.filter((_, i) => i !== index);
     handleMenuStructureChange('buttons', newButtons);
+    
+    // Remove from next_steps if exists
+    if (buttonId && formData.steps?.initial?.next_steps?.[buttonId]) {
+      const nextSteps = { ...formData.steps.initial.next_steps };
+      delete nextSteps[buttonId];
+      setFormData(prev => ({
+        ...prev,
+        steps: {
+          ...prev.steps,
+          initial: {
+            ...prev.steps.initial,
+            next_steps: nextSteps
+          }
+        }
+      }));
+    }
+  };
+
+  const handleNextStepChange = (buttonId, targetStep) => {
+    setFormData(prev => ({
+      ...prev,
+      steps: {
+        ...prev.steps,
+        initial: {
+          ...prev.steps.initial,
+          next_steps: {
+            ...prev.steps.initial.next_steps,
+            [buttonId]: targetStep
+          }
+        }
+      }
+    }));
+  };
+
+  const handleInitialPromptChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      steps: {
+        ...prev.steps,
+        initial: {
+          ...prev.steps.initial,
+          prompt: value
+        }
+      }
+    }));
   };
 
   const validate = () => {
@@ -239,12 +341,18 @@ function TemplateForm({ template, onSubmit, onCancel }) {
         };
       }
 
-      // Add initial step configuration
-      menuStructure.steps = {
-        initial: {
-          prompt: formData.menu_structure.body_text
-        }
-      };
+      // Add steps configuration
+      if (formData.steps && Object.keys(formData.steps).length > 0) {
+        menuStructure.steps = formData.steps;
+      } else {
+        // Default steps if not configured
+        menuStructure.steps = {
+          initial: {
+            prompt: formData.menu_structure.body_text,
+            next_steps: {}
+          }
+        };
+      }
 
       const submitData = {
         template_name: formData.template_name,
@@ -440,24 +548,54 @@ function TemplateForm({ template, onSubmit, onCancel }) {
                 
                 <div className="buttons-list">
                   {formData.menu_structure.buttons && formData.menu_structure.buttons.map((button, index) => (
-                    <div key={index} className="button-item">
-                      <input
-                        type="text"
-                        value={button.reply?.title || ''}
-                        onChange={(e) => handleButtonChange(index, 'reply', { 
-                          ...button.reply, 
-                          title: e.target.value,
-                          id: e.target.value.toLowerCase().replace(/\s+/g, '_')
-                        })}
-                        placeholder={`Button ${index + 1} text`}
-                      />
-                      <button
-                        type="button"
-                        className="btn-remove"
-                        onClick={() => removeButton(index)}
-                      >
-                        ✕
-                      </button>
+                    <div key={index} className="button-item-enhanced">
+                      <div className="button-header">
+                        <strong>Button {index + 1}</strong>
+                        <button
+                          type="button"
+                          className="btn-remove"
+                          onClick={() => removeButton(index)}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                      
+                      <div className="button-fields">
+                        <div className="form-group-inline">
+                          <label>Button ID *</label>
+                          <input
+                            type="text"
+                            value={button.reply?.id || ''}
+                            onChange={(e) => handleButtonChange(index, 'reply.id', e.target.value)}
+                            placeholder="unique_button_id"
+                          />
+                          <small>Unique identifier for this button</small>
+                        </div>
+                        
+                        <div className="form-group-inline">
+                          <label>Button Title *</label>
+                          <input
+                            type="text"
+                            value={button.reply?.title || ''}
+                            onChange={(e) => handleButtonChange(index, 'reply.title', e.target.value)}
+                            placeholder="Button text (max 20 chars)"
+                            maxLength="20"
+                          />
+                          <small>Text shown on button (max 20 characters)</small>
+                        </div>
+                        
+                        <div className="form-group-inline">
+                          <label>Next Step →</label>
+                          <input
+                            type="text"
+                            value={formData.steps?.initial?.next_steps?.[button.reply?.id] || ''}
+                            onChange={(e) => handleNextStepChange(button.reply?.id, e.target.value)}
+                            placeholder="next_template_name"
+                            disabled={!button.reply?.id}
+                          />
+                          <small>Template to show when clicked (optional)</small>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -466,10 +604,45 @@ function TemplateForm({ template, onSubmit, onCancel }) {
                   type="button"
                   className="btn btn-secondary"
                   onClick={addButton}
+                  disabled={formData.menu_structure.buttons.length >= 3}
                 >
                   ➕ Add Button
                 </button>
                 <small>Maximum 3 buttons allowed by WhatsApp</small>
+              </div>
+            )}
+
+            {formData.template_type === 'button' && formData.menu_structure.buttons.length > 0 && (
+              <div className="steps-preview">
+                <h4>📍 Flow Preview</h4>
+                <div className="flow-summary">
+                  <p><strong>Initial Prompt:</strong> {formData.steps?.initial?.prompt || formData.menu_structure.body_text || '(using body text)'}</p>
+                  <p><strong>Button Mappings:</strong></p>
+                  <ul>
+                    {formData.menu_structure.buttons.map((button, index) => {
+                      const buttonId = button.reply?.id;
+                      const buttonTitle = button.reply?.title;
+                      const nextStep = formData.steps?.initial?.next_steps?.[buttonId];
+                      return (
+                        <li key={index}>
+                          <code>{buttonId || '(no id)'}</code> - "{buttonTitle || '(no title)'}" → {nextStep || <em>(end conversation)</em>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+                
+                <div className="form-group">
+                  <label htmlFor="initial_prompt">Override Initial Prompt (optional)</label>
+                  <textarea
+                    id="initial_prompt"
+                    value={formData.steps?.initial?.prompt || ''}
+                    onChange={(e) => handleInitialPromptChange(e.target.value)}
+                    placeholder="Leave empty to use body text as prompt"
+                    rows="2"
+                  />
+                  <small>Custom message for initial step (defaults to body text)</small>
+                </div>
               </div>
             )}
           </div>
