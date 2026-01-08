@@ -22,7 +22,8 @@ function TemplateForm({ template, onSubmit, onCancel }) {
         prompt: '',
         next_steps: {}
       }
-    }
+    },
+    currentStepName: 'initial'
   });
   const [errors, setErrors] = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -36,13 +37,30 @@ function TemplateForm({ template, onSubmit, onCancel }) {
       const header = menuStruct.header || {};
       const headerType = header.type || 'text';
       const headerText = header.text || '';
-      const headerMediaId = header.image?.id || header.video?.id || header.document?.id || '';
-      const headerMediaLink = header.image?.link || header.video?.link || header.document?.link || '';
-      const headerFilename = header.document?.filename || '';
+      
+      // Handle media - check both nested structure and direct link/id
+      let headerMediaId = '';
+      let headerMediaLink = '';
+      let headerFilename = '';
+      
+      if (headerType === 'image') {
+        headerMediaId = header.image?.id || header.id || '';
+        headerMediaLink = header.image?.link || header.link || '';
+      } else if (headerType === 'video') {
+        headerMediaId = header.video?.id || header.id || '';
+        headerMediaLink = header.video?.link || header.link || '';
+      } else if (headerType === 'document') {
+        headerMediaId = header.document?.id || header.id || '';
+        headerMediaLink = header.document?.link || header.link || '';
+        headerFilename = header.document?.filename || header.filename || '';
+      }
+      
       const bodyText = menuStruct.body?.text || '';
       const footerText = menuStruct.footer?.text || '';
       const buttons = menuStruct.action?.buttons || [];
       const steps = menuStruct.steps || { initial: { prompt: bodyText, next_steps: {} } };
+      // Get the first step name as current (usually 'initial')
+      const currentStepName = Object.keys(steps)[0] || 'initial';
       
       setFormData({
         template_name: template.template_name || '',
@@ -59,7 +77,8 @@ function TemplateForm({ template, onSubmit, onCancel }) {
           footer_text: footerText,
           buttons: buttons
         },
-        steps: steps
+        steps: steps,
+        currentStepName: currentStepName
       });
     }
   }, [template]);
@@ -100,8 +119,9 @@ function TemplateForm({ template, onSubmit, onCancel }) {
       };
       
       // Update next_steps mapping if old ID existed
-      if (oldId && formData.steps?.initial?.next_steps?.[oldId]) {
-        const nextSteps = { ...formData.steps.initial.next_steps };
+      const currentStep = formData.currentStepName;
+      if (oldId && formData.steps?.[currentStep]?.next_steps?.[oldId]) {
+        const nextSteps = { ...formData.steps[currentStep].next_steps };
         const targetStep = nextSteps[oldId];
         delete nextSteps[oldId];
         if (newId) {
@@ -111,8 +131,8 @@ function TemplateForm({ template, onSubmit, onCancel }) {
           ...prev,
           steps: {
             ...prev.steps,
-            initial: {
-              ...prev.steps.initial,
+            [currentStep]: {
+              ...prev.steps[currentStep],
               next_steps: nextSteps
             }
           }
@@ -151,15 +171,16 @@ function TemplateForm({ template, onSubmit, onCancel }) {
     handleMenuStructureChange('buttons', newButtons);
     
     // Remove from next_steps if exists
-    if (buttonId && formData.steps?.initial?.next_steps?.[buttonId]) {
-      const nextSteps = { ...formData.steps.initial.next_steps };
+    const currentStep = formData.currentStepName;
+    if (buttonId && formData.steps?.[currentStep]?.next_steps?.[buttonId]) {
+      const nextSteps = { ...formData.steps[currentStep].next_steps };
       delete nextSteps[buttonId];
       setFormData(prev => ({
         ...prev,
         steps: {
           ...prev.steps,
-          initial: {
-            ...prev.steps.initial,
+          [currentStep]: {
+            ...prev.steps[currentStep],
             next_steps: nextSteps
           }
         }
@@ -172,10 +193,10 @@ function TemplateForm({ template, onSubmit, onCancel }) {
       ...prev,
       steps: {
         ...prev.steps,
-        initial: {
-          ...prev.steps.initial,
+        [prev.currentStepName]: {
+          ...prev.steps[prev.currentStepName],
           next_steps: {
-            ...prev.steps.initial.next_steps,
+            ...prev.steps[prev.currentStepName].next_steps,
             [buttonId]: targetStep
           }
         }
@@ -188,11 +209,29 @@ function TemplateForm({ template, onSubmit, onCancel }) {
       ...prev,
       steps: {
         ...prev.steps,
-        initial: {
-          ...prev.steps.initial,
+        [prev.currentStepName]: {
+          ...prev.steps[prev.currentStepName],
           prompt: value
         }
       }
+    }));
+  };
+
+  const handleStepNameChange = (newStepName) => {
+    const oldStepName = formData.currentStepName;
+    
+    if (newStepName === oldStepName) return;
+    if (!newStepName.trim()) return;
+    
+    // Rename the step
+    const newSteps = { ...formData.steps };
+    newSteps[newStepName] = { ...newSteps[oldStepName] };
+    delete newSteps[oldStepName];
+    
+    setFormData(prev => ({
+      ...prev,
+      steps: newSteps,
+      currentStepName: newStepName
     }));
   };
 
@@ -346,8 +385,9 @@ function TemplateForm({ template, onSubmit, onCancel }) {
         menuStructure.steps = formData.steps;
       } else {
         // Default steps if not configured
+        const stepName = formData.currentStepName || 'initial';
         menuStructure.steps = {
-          initial: {
+          [stepName]: {
             prompt: formData.menu_structure.body_text,
             next_steps: {}
           }
@@ -588,12 +628,12 @@ function TemplateForm({ template, onSubmit, onCancel }) {
                           <label>Next Step →</label>
                           <input
                             type="text"
-                            value={formData.steps?.initial?.next_steps?.[button.reply?.id] || ''}
+                            value={formData.steps?.[formData.currentStepName]?.next_steps?.[button.reply?.id] || ''}
                             onChange={(e) => handleNextStepChange(button.reply?.id, e.target.value)}
-                            placeholder="next_template_name"
+                            placeholder="template_name or step_name"
                             disabled={!button.reply?.id}
                           />
-                          <small>Template to show when clicked (optional)</small>
+                          <small>Template name or step name to navigate to when clicked</small>
                         </div>
                       </div>
                     </div>
@@ -614,15 +654,29 @@ function TemplateForm({ template, onSubmit, onCancel }) {
 
             {formData.template_type === 'button' && formData.menu_structure.buttons.length > 0 && (
               <div className="steps-preview">
-                <h4>📍 Flow Preview</h4>
+                <h4>📍 Flow Configuration</h4>
+                
+                <div className="form-group">
+                  <label htmlFor="step_name">Step Name</label>
+                  <input
+                    type="text"
+                    id="step_name"
+                    value={formData.currentStepName}
+                    onChange={(e) => handleStepNameChange(e.target.value)}
+                    placeholder="initial"
+                  />
+                  <small>Unique identifier for this step (e.g., 'initial', 'collect_info', 'confirm')</small>
+                </div>
+                
                 <div className="flow-summary">
-                  <p><strong>Initial Prompt:</strong> {formData.steps?.initial?.prompt || formData.menu_structure.body_text || '(using body text)'}</p>
+                  <p><strong>Current Step:</strong> <code>{formData.currentStepName}</code></p>
+                  <p><strong>Step Prompt:</strong> {formData.steps?.[formData.currentStepName]?.prompt || formData.menu_structure.body_text || '(using body text)'}</p>
                   <p><strong>Button Mappings:</strong></p>
                   <ul>
                     {formData.menu_structure.buttons.map((button, index) => {
                       const buttonId = button.reply?.id;
                       const buttonTitle = button.reply?.title;
-                      const nextStep = formData.steps?.initial?.next_steps?.[buttonId];
+                      const nextStep = formData.steps?.[formData.currentStepName]?.next_steps?.[buttonId];
                       return (
                         <li key={index}>
                           <code>{buttonId || '(no id)'}</code> - "{buttonTitle || '(no title)'}" → {nextStep || <em>(end conversation)</em>}
@@ -633,15 +687,15 @@ function TemplateForm({ template, onSubmit, onCancel }) {
                 </div>
                 
                 <div className="form-group">
-                  <label htmlFor="initial_prompt">Override Initial Prompt (optional)</label>
+                  <label htmlFor="step_prompt">Step Prompt (optional)</label>
                   <textarea
-                    id="initial_prompt"
-                    value={formData.steps?.initial?.prompt || ''}
+                    id="step_prompt"
+                    value={formData.steps?.[formData.currentStepName]?.prompt || ''}
                     onChange={(e) => handleInitialPromptChange(e.target.value)}
                     placeholder="Leave empty to use body text as prompt"
                     rows="2"
                   />
-                  <small>Custom message for initial step (defaults to body text)</small>
+                  <small>Custom message for this step (defaults to body text)</small>
                 </div>
               </div>
             )}
