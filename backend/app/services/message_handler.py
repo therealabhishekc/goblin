@@ -318,20 +318,69 @@ class InteractiveMessageHandler:
                 "action": action
             }
             
-            # Add header if present and has required type field
+            # Add header if present - supports text, image, video, document
             if "header" in menu_structure:
                 header = menu_structure["header"]
-                # WhatsApp requires header to have a 'type' field
-                # If only text is provided, add type='text'
-                if "text" in header and "type" not in header:
+                header_type = header.get("type")
+                
+                if header_type == "text":
+                    # Text header
+                    interactive_payload["header"] = {
+                        "type": "text",
+                        "text": header.get("text", "")
+                    }
+                elif header_type == "image":
+                    # Image header - supports both id and link
+                    if "id" in header:
+                        interactive_payload["header"] = {
+                            "type": "image",
+                            "image": {"id": header["id"]}
+                        }
+                    elif "link" in header:
+                        interactive_payload["header"] = {
+                            "type": "image",
+                            "image": {"link": header["link"]}
+                        }
+                elif header_type == "video":
+                    # Video header - supports both id and link
+                    if "id" in header:
+                        interactive_payload["header"] = {
+                            "type": "video",
+                            "video": {"id": header["id"]}
+                        }
+                    elif "link" in header:
+                        interactive_payload["header"] = {
+                            "type": "video",
+                            "video": {"link": header["link"]}
+                        }
+                elif header_type == "document":
+                    # Document header - supports both id and link
+                    if "id" in header:
+                        doc_header = {"id": header["id"]}
+                        if "filename" in header:
+                            doc_header["filename"] = header["filename"]
+                        interactive_payload["header"] = {
+                            "type": "document",
+                            "document": doc_header
+                        }
+                    elif "link" in header:
+                        doc_header = {"link": header["link"]}
+                        if "filename" in header:
+                            doc_header["filename"] = header["filename"]
+                        interactive_payload["header"] = {
+                            "type": "document",
+                            "document": doc_header
+                        }
+                elif "text" in header and "type" not in header:
+                    # Legacy support: if only text provided without type
                     interactive_payload["header"] = {
                         "type": "text",
                         "text": header["text"]
                     }
-                    logger.debug(f"Added header with type=text: {header['text']}")
-                elif "type" in header:
-                    interactive_payload["header"] = header
-                    logger.debug(f"Added header: {header}")
+                    logger.debug(f"Added legacy text header: {header['text']}")
+                
+                if "header" in interactive_payload:
+                    logger.debug(f"Added header type={header_type}: {interactive_payload['header']}")
             
             # Add footer if present
             if "footer" in menu_structure:
@@ -356,20 +405,16 @@ class InteractiveMessageHandler:
                 "action": action
             }
             
-            # Add header if present and has required type field
+            # Add header if present - list messages only support text headers
             if "header" in menu_structure:
                 header = menu_structure["header"]
-                # WhatsApp requires header to have a 'type' field
-                # If only text is provided, add type='text'
-                if "text" in header and "type" not in header:
+                # List messages only support text headers per WhatsApp API
+                if header.get("type") == "text" or "text" in header:
                     interactive_payload["header"] = {
                         "type": "text",
-                        "text": header["text"]
+                        "text": header.get("text", "")
                     }
-                    logger.debug(f"Added header with type=text: {header['text']}")
-                elif "type" in header:
-                    interactive_payload["header"] = header
-                    logger.debug(f"Added header: {header}")
+                    logger.debug(f"Added text header for list: {header.get('text')}")
             
             # Add footer if present
             if "footer" in menu_structure:

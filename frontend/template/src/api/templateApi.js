@@ -36,11 +36,19 @@ export const getTemplate = async (id) => {
 // Create new template
 export const createTemplate = async (templateData) => {
   try {
+    console.log('🔍 Creating template with data:', templateData);
     const response = await api.post('/templates/', templateData);
+    console.log('✅ Template created successfully:', response.data);
     return response.data;
   } catch (error) {
-    console.error('Error creating template:', error);
-    throw new Error(error.response?.data?.detail || 'Failed to create template');
+    console.error('❌ Error creating template:', error);
+    console.error('Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      statusText: error.response?.statusText
+    });
+    throw new Error(error.response?.data?.detail || error.message || 'Failed to create template');
   }
 };
 

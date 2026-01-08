@@ -44,7 +44,23 @@ deploy_lambda() {
     grep -v "^boto3" "$OLDPWD/$SOURCE_DIR/requirements.txt" > requirements_temp.txt || true
     
     if [ -s requirements_temp.txt ]; then
-        pip3 install -r requirements_temp.txt -t . --platform manylinux2014_x86_64 --python-version 3.9 --only-binary=:all: --upgrade
+        echo -e "${YELLOW}📦 Installing packages for Lambda (manylinux2014_x86_64)...${NC}"
+        
+        # Install packages targeting Lambda's platform
+        # psycopg2-binary should work with the correct platform specification
+        pip3 install -r requirements_temp.txt \
+            --target . \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.9 \
+            --only-binary=:all: \
+            --upgrade \
+            --no-compile 2>&1 | grep -v "Requirement already satisfied" || true
+        
+        # Clean up unnecessary files to reduce package size
+        find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+        find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+        find . -type f -name "*.pyc" -delete 2>/dev/null || true
     fi
 
     # Copy Lambda handler

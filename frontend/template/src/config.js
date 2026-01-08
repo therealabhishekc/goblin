@@ -6,11 +6,11 @@ const config = {
   LOCAL_API_URL: 'http://localhost:8000',
   
   // For production (AWS App Runner)
-  PRODUCTION_API_URL: 'https://2hdfnnus3x.us-east-1.awsapprunner.com',
+  PRODUCTION_API_URL: 'https://byqpifhtjq.us-east-1.awsapprunner.com',
   
-  // Current environment
-  // Uses REACT_APP_API_URL env var if set, otherwise defaults to PRODUCTION_API_URL
-  API_URL: process.env.REACT_APP_API_URL || 'https://2hdfnnus3x.us-east-1.awsapprunner.com'
+  // Current environment - configured directly in this file
+  // Change this to LOCAL_API_URL for local development
+  API_URL: 'https://byqpifhtjq.us-east-1.awsapprunner.com'
 };
 
 export default config;
