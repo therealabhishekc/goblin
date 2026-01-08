@@ -318,10 +318,20 @@ class InteractiveMessageHandler:
                 "action": action
             }
             
-            # Add header if present
+            # Add header if present and has required type field
             if "header" in menu_structure:
-                interactive_payload["header"] = menu_structure["header"]
-                logger.debug(f"Added header: {menu_structure['header']}")
+                header = menu_structure["header"]
+                # WhatsApp requires header to have a 'type' field
+                # If only text is provided, add type='text'
+                if "text" in header and "type" not in header:
+                    interactive_payload["header"] = {
+                        "type": "text",
+                        "text": header["text"]
+                    }
+                    logger.debug(f"Added header with type=text: {header['text']}")
+                elif "type" in header:
+                    interactive_payload["header"] = header
+                    logger.debug(f"Added header: {header}")
             
             # Add footer if present
             if "footer" in menu_structure:
@@ -346,10 +356,20 @@ class InteractiveMessageHandler:
                 "action": action
             }
             
-            # Add header if present
+            # Add header if present and has required type field
             if "header" in menu_structure:
-                interactive_payload["header"] = menu_structure["header"]
-                logger.debug(f"Added header: {menu_structure['header']}")
+                header = menu_structure["header"]
+                # WhatsApp requires header to have a 'type' field
+                # If only text is provided, add type='text'
+                if "text" in header and "type" not in header:
+                    interactive_payload["header"] = {
+                        "type": "text",
+                        "text": header["text"]
+                    }
+                    logger.debug(f"Added header with type=text: {header['text']}")
+                elif "type" in header:
+                    interactive_payload["header"] = header
+                    logger.debug(f"Added header: {header}")
             
             # Add footer if present
             if "footer" in menu_structure:
