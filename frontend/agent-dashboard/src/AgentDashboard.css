@@ -1,0 +1,379 @@
+.agent-dashboard {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.dashboard-header {
+  background: #25D366;
+  color: white;
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.agent-info {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.agent-info button {
+  background: white;
+  color: #25D366;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.dashboard-tabs {
+  display: flex;
+  background: #f5f5f5;
+  border-bottom: 2px solid #ddd;
+}
+
+.dashboard-tabs button {
+  flex: 1;
+  padding: 1rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #666;
+  transition: all 0.3s;
+}
+
+.dashboard-tabs button.active {
+  background: white;
+  color: #25D366;
+  border-bottom: 3px solid #25D366;
+}
+
+.dashboard-tabs button:hover {
+  background: #eee;
+}
+
+.dashboard-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sessions-panel {
+  width: 350px;
+  border-right: 1px solid #ddd;
+  overflow-y: auto;
+  background: #f9f9f9;
+}
+
+.waiting-section, .active-section, .all-section, .history-section {
+  padding: 1rem;
+}
+
+.waiting-section h3, .active-section h3, .all-section h3, .history-section h3 {
+  margin: 0 0 1rem 0;
+  color: #333;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.session-card {
+  background: white;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.session-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  transform: translateY(-1px);
+}
+
+.session-card.selected {
+  background: #E8F5E9;
+  border-left: 4px solid #25D366;
+}
+
+.session-card.waiting {
+  border-left: 4px solid #FFA726;
+}
+
+.session-info {
+  flex: 1;
+}
+
+.customer-name {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 0.25rem;
+}
+
+.agent-assigned {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.25rem;
+}
+
+.session-time {
+  font-size: 0.75rem;
+  color: #999;
+}
+
+.accept-btn {
+  background: #25D366;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  font-weight: 600;
+  width: 100%;
+}
+
+.accept-btn:hover {
+  background: #128C7E;
+}
+
+.chat-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: #ECE5DD;
+}
+
+.chat-header {
+  background: white;
+  padding: 1rem;
+  border-bottom: 1px solid #ddd;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  color: #333;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-left: 0.5rem;
+  background: #FFE082;
+  color: #333;
+}
+
+.end-btn {
+  background: #D32F2F;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.end-btn:hover {
+  background: #B71C1C;
+}
+
+.messages-container {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.message {
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  max-width: 70%;
+}
+
+.customer-message {
+  background: white;
+  margin-right: auto;
+}
+
+.agent-message {
+  background: #DCF8C6;
+  margin-left: auto;
+}
+
+.system-message {
+  background: #FFF9C4;
+  margin: 1rem auto;
+  text-align: center;
+  font-style: italic;
+  max-width: 50%;
+}
+
+.message-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.sender {
+  font-weight: 600;
+  color: #666;
+}
+
+.timestamp {
+  color: #999;
+}
+
+.message-text {
+  color: #333;
+  word-wrap: break-word;
+}
+
+.message-input {
+  display: flex;
+  padding: 1rem;
+  background: white;
+  border-top: 1px solid #ddd;
+}
+
+.message-input input {
+  flex: 1;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 25px;
+  font-size: 1rem;
+  outline: none;
+}
+
+.message-input input:focus {
+  border-color: #25D366;
+}
+
+.message-input button {
+  background: #25D366;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 25px;
+  margin-left: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.message-input button:hover {
+  background: #128C7E;
+}
+
+.no-chat-selected {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: #999;
+  font-size: 1.2rem;
+}
+
+.chat-ended-notice {
+  padding: 1rem;
+  background: #E8F5E9;
+  text-align: center;
+  color: #2E7D32;
+  font-weight: 600;
+}
+
+/* Login screen */
+.login-container {
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: linear-gradient(135deg, #25D366 0%, #128C7E 100%);
+}
+
+.login-box {
+  background: white;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  width: 300px;
+}
+
+.login-box h2 {
+  margin: 0 0 1.5rem 0;
+  color: #333;
+  text-align: center;
+}
+
+.login-box input {
+  width: 100%;
+  padding: 0.75rem;
+  margin-bottom: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 1rem;
+  box-sizing: border-box;
+}
+
+.login-box button {
+  width: 100%;
+  padding: 0.75rem;
+  background: #25D366;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.login-box button:hover {
+  background: #128C7E;
+}
+
+/* History filters */
+.history-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.history-filters input {
+  padding: 0.5rem;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  font-size: 0.9rem;
+}
+
+.history-filters button {
+  padding: 0.5rem;
+  background: #25D366;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.history-filters button:hover {
+  background: #128C7E;
+}

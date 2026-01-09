@@ -43,6 +43,10 @@ try:
     from app.api import templates
 except ImportError:
     templates = None
+try:
+    from app.api import agent_routes
+except ImportError:
+    agent_routes = None
 
 # SQS Workers
 try:
@@ -221,6 +225,14 @@ if templates:
         logger.info("✅ Templates API endpoints loaded")
     except Exception as e:
         logger.warning(f"⚠️  Templates API endpoints failed to load: {e}")
+
+# Include agent routes if available
+if agent_routes:
+    try:
+        app.include_router(agent_routes.router)
+        logger.info("✅ Agent API endpoints loaded")
+    except Exception as e:
+        logger.warning(f"⚠️  Agent API endpoints failed to load: {e}")
 
 # Include other routers if available
 try:

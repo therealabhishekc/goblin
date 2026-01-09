@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.services.conversation_service import ConversationService
+from app.services.agent_service import AgentService
 from app.whatsapp_api import send_whatsapp_message
 from app.core.logging import logger
 
@@ -16,6 +17,7 @@ class InteractiveMessageHandler:
     def __init__(self, db_session: Session):
         self.db = db_session
         self.conv_service = ConversationService(db_session)
+        self.agent_service = AgentService(db_session)
     
     async def handle_text_message(
         self,
@@ -28,7 +30,14 @@ class InteractiveMessageHandler:
         Returns:
             Processing result
         """
-        # First check if this text matches any trigger keyword
+        # PRIORITY 1: Check if user has an active agent session
+        active_session = self.agent_service.get_active_session_by_phone(phone_number)
+        
+        if active_session:
+            # User is chatting with an agent
+            return await self._handle_agent_mode(phone_number, text, active_session)
+        
+        # PRIORITY 2: Check if this text matches any trigger keyword
         # This allows users to restart conversations by typing trigger words
         template = self.conv_service.find_template_by_keyword(text)
         
@@ -237,6 +246,29 @@ class InteractiveMessageHandler:
         conversation: Any
     ) -> Dict[str, Any]:
         """Process button or list selection"""
+        
+        # Check if selection is "AGENT_MODE" - customer wants to talk to an agent
+        if selection_id == "AGENT_MODE":
+            logger.info(f"🙋 Customer {phone_number} requested agent mode")
+            
+            # End current conversation
+            self.conv_service.end_conversation(phone_number)
+            
+            # Start agent session
+            session = self.agent_service.start_agent_session(str(conversation.id))
+            
+            await send_whatsapp_message(
+                phone_number,
+                {
+                    "type": "text",
+                    "content": "🙋 Connecting you to an agent...\nPlease wait while we find someone to help you.\n\nType 'end chat' to return to the menu."
+                }
+            )
+            
+            return {
+                "status": "agent_mode_activated",
+                "session_id": str(session.id)
+            }
         
         template = self.conv_service.get_template(conversation.conversation_flow)
         if not template:
@@ -476,6 +508,65 @@ class InteractiveMessageHandler:
         logger.info(f"🚀 Calling send_whatsapp_message for {phone_number}")
         result = await send_whatsapp_message(phone_number, message)
         logger.info(f"✅ send_whatsapp_message returned: {result}")
+    
+    async def _handle_agent_mode(
+        self,
+        phone_number: str,
+        text: str,
+        session: Any
+    ) -> Dict[str, Any]:
+        """Handle messages when customer is in agent mode"""
+        
+        logger.info(f"💬 Agent mode message from {phone_number}: {text}")
+        
+        # Check if customer wants to end chat
+        if text.lower().strip() in ["end chat", "end", "stop", "quit"]:
+            logger.info(f"👋 Customer {phone_number} ending agent chat")
+            
+            self.agent_service.end_agent_session(str(session.id))
+            
+            await send_whatsapp_message(
+                phone_number,
+                {
+                    "type": "text",
+                    "content": "✅ Chat ended.\n\nType 'menu' to return to the main menu."
+                }
+            )
+            
+            # End conversation
+            self.conv_service.end_conversation(phone_number)
+            
+            return {"status": "agent_chat_ended"}
+        
+        # Save customer message
+        self.agent_service.save_message(
+            session_id=str(session.id),
+            sender_type="customer",
+            sender_id=phone_number,
+            message_text=text
+        )
+        
+        # If no agent assigned yet, remind customer
+        if session.status == "waiting":
+            # Only send reminder occasionally to avoid spam
+            # Check if we've sent a reminder recently
+            messages = self.agent_service.get_session_messages(str(session.id), limit=5)
+            recent_system_messages = [m for m in messages if m.sender_type == "system"]
+            
+            # Send reminder if no recent system messages
+            if len(recent_system_messages) == 0:
+                await send_whatsapp_message(
+                    phone_number,
+                    {
+                        "type": "text",
+                        "content": "⏳ Your message has been received. An agent will join shortly."
+                    }
+                )
+        
+        return {
+            "status": "message_saved",
+            "session_status": session.status
+        }
     
     def _format_prompt(self, prompt: str, context: Dict[str, Any]) -> str:
         """Replace placeholders in prompt with context values"""
