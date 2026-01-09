@@ -694,6 +694,48 @@ Resources:
         - Key: Function
           Value: media-archival
 
+  # Agent Expiration Lambda Function
+  AgentExpirationFunction:
+    Type: AWS::Lambda::Function
+    Condition: EnableArchivalResources
+    Properties:
+      FunctionName: !Sub '${Environment}-whatsapp-agent-expiration'
+      Runtime: python3.9
+      Handler: lambda_function.lambda_handler
+      Role: !GetAtt LambdaArchivalExecutionRole.Arn
+      Code:
+        ZipFile: |
+          # Placeholder code - will be updated during deployment
+          import json
+          def lambda_handler(event, context):
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps({
+                      'message': 'Lambda function created - code will be updated during deployment',
+                      'event': event
+                  })
+              }
+      Timeout: 300  # 5 minutes
+      MemorySize: 512
+      Environment:
+        Variables:
+          DB_HOST: !GetAtt PostgreSQLDB.Endpoint.Address
+          DB_PORT: !GetAtt PostgreSQLDB.Endpoint.Port
+          DB_NAME: !Sub 'whatsapp_business_${Environment}'
+          DB_USER: 'app_user'
+          DB_PASSWORD: ''  # Will be set via Secrets Manager or parameter
+          WHATSAPP_API_URL: !Sub 'https://${AppRunnerServiceUrl}'
+          ENVIRONMENT: !Ref Environment
+      DeadLetterConfig:
+        TargetArn: !GetAtt ArchivalDLQ.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: whatsapp-business-api
+        - Key: Function
+          Value: agent-expiration
+
   # EventBridge Rules for Scheduling
   MessageArchivalScheduleRule:
     Type: AWS::Events::Rule
@@ -733,6 +775,25 @@ Resources:
               "trigger_time": "scheduled_every_5_minuites"
             }
 
+  AgentExpirationScheduleRule:
+    Type: AWS::Events::Rule
+    Condition: EnableArchivalResources
+    Properties:
+      Name: !Sub '${Environment}-whatsapp-agent-expiration-schedule'
+      Description: 'Trigger agent session expiration check every 5 minutes'
+      ScheduleExpression: 'rate(5 minutes)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt AgentExpirationFunction.Arn
+          Id: AgentExpirationTarget
+          Input: !Sub |
+            {
+              "job_type": "agent_expiration",
+              "scheduled": true,
+              "environment": "${Environment}",
+              "trigger_time": "scheduled_every_5_minutes"
+            }
+
   # Lambda Permissions for EventBridge
   MessageArchivalInvokePermission:
     Type: AWS::Lambda::Permission
@@ -751,6 +812,15 @@ Resources:
       Action: lambda:InvokeFunction
       Principal: events.amazonaws.com
       SourceArn: !GetAtt MediaArchivalScheduleRule.Arn
+
+  AgentExpirationInvokePermission:
+    Type: AWS::Lambda::Permission
+    Condition: EnableArchivalResources
+    Properties:
+      FunctionName: !Ref AgentExpirationFunction
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt AgentExpirationScheduleRule.Arn
 
   # Dead Letter Queue for Archival Functions
   ArchivalDLQ:
@@ -803,6 +873,24 @@ Resources:
           Value: !Ref MediaArchivalFunction
       TreatMissingData: notBreaching
 
+  AgentExpirationErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Condition: EnableArchivalResources
+    Properties:
+      AlarmName: !Sub '${Environment}-whatsapp-agent-expiration-errors'
+      AlarmDescription: 'Alert when agent expiration Lambda function has errors'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AgentExpirationFunction
+      TreatMissingData: notBreaching
+
   # CloudWatch Log Groups for Lambda Functions
   MessageArchivalLogGroup:
     Type: AWS::Logs::LogGroup
@@ -816,6 +904,13 @@ Resources:
     Condition: EnableArchivalResources
     Properties:
       LogGroupName: !Sub '/aws/lambda/${Environment}-whatsapp-media-archival'
+      RetentionInDays: 14
+
+  AgentExpirationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: EnableArchivalResources
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${Environment}-whatsapp-agent-expiration'
       RetentionInDays: 14
 
   # ================================
@@ -1066,6 +1161,13 @@ Outputs:
     Value: !GetAtt MediaArchivalFunction.Arn
     Export:
       Name: !Sub '${Environment}-whatsapp-media-archival-function-arn'
+
+  AgentExpirationFunctionArn:
+    Description: ARN of the agent expiration Lambda function
+    Condition: EnableArchivalResources
+    Value: !GetAtt AgentExpirationFunction.Arn
+    Export:
+      Name: !Sub '${Environment}-whatsapp-agent-expiration-function-arn'
 
   ArchivalScheduleEnabled:
     Description: Whether archival scheduling is enabled
