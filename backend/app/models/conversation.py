@@ -30,13 +30,11 @@ class ConversationStateCreate(BaseModel):
     """Request model for creating a conversation state"""
     phone_number: str = Field(..., description="Customer phone number")
     conversation_flow: str = Field(..., description="Template name/flow identifier")
-    current_step: str = Field(..., description="Current step in the flow")
     context: Dict[str, Any] = Field(default={}, description="Conversation context data")
     expires_at: Optional[datetime] = Field(None, description="When conversation expires")
 
 class ConversationStateUpdate(BaseModel):
     """Request model for updating conversation state"""
-    current_step: Optional[str] = None
     context: Optional[Dict[str, Any]] = None
     expires_at: Optional[datetime] = None
 
@@ -45,7 +43,6 @@ class ConversationStateResponse(BaseModel):
     id: str
     phone_number: str
     conversation_flow: str
-    current_step: str
     context: Dict[str, Any]
     last_interaction: datetime
     expires_at: Optional[datetime]
@@ -93,7 +90,6 @@ class ConversationStateDB(Base):
     
     # Flow tracking
     conversation_flow = Column(String(50), nullable=False, index=True)  # Template name
-    current_step = Column(String(50), nullable=False)  # Current step in flow
     
     # Context data
     context = Column(JSONB, default={})  # Stores user selections, inputs, etc.

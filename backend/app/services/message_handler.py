@@ -156,7 +156,9 @@ class InteractiveMessageHandler:
         
         # Get current step definition
         steps = template.menu_structure.get("steps", {})
-        current_step_def = steps.get(conversation.current_step, {})
+        # Use context to track which step we're on, default to 'initial'
+        current_step_name = conversation.context.get("current_step", "initial")
+        current_step_def = steps.get(current_step_name, {})
         
         # Check if user wants to return to main menu
         if text.lower().strip() in ["menu", "main menu", "back"]:
@@ -166,7 +168,7 @@ class InteractiveMessageHandler:
         
         # Check if this step has next_steps (button/list selection expected, not text)
         if "next_steps" in current_step_def:
-            logger.warning(f"⚠️ Text received but button/list selection expected at step {conversation.current_step}")
+            logger.warning(f"⚠️ Text received but button/list selection expected at step {current_step_name}")
             await send_whatsapp_message(
                 phone_number,
                 {"type": "text", "content": "Please select one of the options from the menu above."}
@@ -193,7 +195,7 @@ class InteractiveMessageHandler:
         # Move to next step
         next_step = current_step_def.get("next_step")
         if not next_step:
-            logger.warning(f"⚠️ No next step defined for {conversation.current_step}, ending conversation")
+            logger.warning(f"⚠️ No next step defined for {current_step_name}, ending conversation")
             # End conversation gracefully
             await send_whatsapp_message(
                 phone_number,
@@ -202,10 +204,10 @@ class InteractiveMessageHandler:
             self.conv_service.end_conversation(phone_number)
             return {"status": "conversation_ended"}
         
-        # Update conversation
+        # Update conversation with next step in context
+        context_update["current_step"] = next_step
         self.conv_service.update_conversation(
             phone_number=phone_number,
-            current_step=next_step,
             context_update=context_update
         )
         
@@ -243,12 +245,14 @@ class InteractiveMessageHandler:
         
         # Get step definition
         steps = template.menu_structure.get("steps", {})
-        current_step_def = steps.get(conversation.current_step, {})
+        # Use context to track which step we're on, default to 'initial'
+        current_step_name = conversation.context.get("current_step", "initial")
+        current_step_def = steps.get(current_step_name, {})
         
         # Determine next step based on selection
         next_steps = current_step_def.get("next_steps", {})
         
-        logger.info(f"🔘 Processing selection '{selection_id}' at step '{conversation.current_step}'")
+        logger.info(f"🔘 Processing selection '{selection_id}' at step '{current_step_name}'")
         logger.debug(f"Available next_steps: {next_steps}")
         
         if selection_id not in next_steps:
@@ -275,12 +279,14 @@ class InteractiveMessageHandler:
                     break
             
             # Build context with selection info
+            current_step_name = conversation.context.get("current_step", "initial")
             new_context = {
                 "selection_id": selection_id,
                 "selection_title": button_title,
                 "previous_template": conversation.conversation_flow,
-                "previous_step": conversation.current_step,
-                "selection_timestamp": datetime.utcnow().isoformat()
+                "previous_step": current_step_name,
+                "selection_timestamp": datetime.utcnow().isoformat(),
+                "current_step": "initial"  # Reset to initial for new template
             }
             
             # Preserve any existing context data
@@ -311,8 +317,10 @@ class InteractiveMessageHandler:
             logger.info(f"➡️ Moving to step: {next_value}")
             self.conv_service.update_conversation(
                 phone_number=phone_number,
-                current_step=next_value,
-                context_update={"selection": selection_id}
+                context_update={
+                    "selection": selection_id,
+                    "current_step": next_value
+                }
             )
             
             # Get next step definition and send appropriate message

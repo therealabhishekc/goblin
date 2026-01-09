@@ -136,7 +136,6 @@ class ConversationService:
         self,
         phone_number: str,
         template_name: str,
-        initial_step: str = "initial",
         context: Dict[str, Any] = None,
         expiry_hours: int = 24
     ) -> ConversationStateDB:
@@ -146,7 +145,6 @@ class ConversationService:
         Args:
             phone_number: Customer's phone number
             template_name: Which template to use
-            initial_step: Starting step
             context: Initial context data
             expiry_hours: Hours until conversation expires
             
@@ -163,7 +161,6 @@ class ConversationService:
         conversation = ConversationStateDB(
             phone_number=phone_number,
             conversation_flow=template_name,
-            current_step=initial_step,
             context=context or {},
             last_interaction=datetime.utcnow(),
             expires_at=datetime.utcnow() + timedelta(hours=expiry_hours)
@@ -186,7 +183,6 @@ class ConversationService:
     def update_conversation(
         self,
         phone_number: str,
-        current_step: str = None,
         context_update: Dict[str, Any] = None,
         new_template: str = None
     ) -> Optional[ConversationStateDB]:
@@ -195,7 +191,6 @@ class ConversationService:
         
         Args:
             phone_number: Customer's phone number
-            current_step: New step to move to
             context_update: Data to add/update in context
             new_template: Switch to a different template
             
@@ -208,9 +203,6 @@ class ConversationService:
             return None
         
         # Update fields
-        if current_step:
-            conversation.current_step = current_step
-        
         if new_template:
             conversation.conversation_flow = new_template
         
@@ -225,7 +217,7 @@ class ConversationService:
         self.db.commit()
         self.db.refresh(conversation)
         
-        logger.info(f"📝 Updated conversation: {phone_number} -> step={current_step}")
+        logger.info(f"📝 Updated conversation: {phone_number}")
         return conversation
     
     def end_conversation(self, phone_number: str) -> bool:
