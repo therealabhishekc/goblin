@@ -136,31 +136,25 @@ class AgentService:
     
     def get_active_session_by_phone(self, phone_number: str) -> Optional[AgentSessionDB]:
         """Get active agent session for a phone number"""
-        # First try to find by conversation
-        conversation = self.db.query(ConversationStateDB).filter(
-            ConversationStateDB.phone_number == phone_number
-        ).first()
-        
-        if conversation:
-            session = self.db.query(AgentSessionDB).filter(
-                AgentSessionDB.conversation_id == conversation.id,
+        try:
+            # Direct query joining agent_sessions with conversation_state
+            session = self.db.query(AgentSessionDB).join(
+                ConversationStateDB,
+                AgentSessionDB.conversation_id == ConversationStateDB.id
+            ).filter(
+                ConversationStateDB.phone_number == phone_number,
                 AgentSessionDB.status.in_(["waiting", "active"])
             ).first()
             
             if session:
-                return session
-        
-        # Also check if there's an active session by joining with conversation table
-        # This handles cases where conversation might be missing but session exists
-        session = self.db.query(AgentSessionDB).join(
-            ConversationStateDB,
-            AgentSessionDB.conversation_id == ConversationStateDB.id
-        ).filter(
-            ConversationStateDB.phone_number == phone_number,
-            AgentSessionDB.status.in_(["waiting", "active"])
-        ).first()
-        
-        return session
+                logger.info(f"✅ Found {session.status} agent session {session.id} for {phone_number}")
+            else:
+                logger.info(f"❌ No active agent session for {phone_number}")
+            
+            return session
+        except Exception as e:
+            logger.error(f"Error checking agent session for {phone_number}: {e}", exc_info=True)
+            return None
     
     def get_waiting_sessions(self) -> List[AgentSessionResponse]:
         """Get all sessions waiting for an agent"""

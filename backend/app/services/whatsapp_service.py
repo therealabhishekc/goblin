@@ -181,9 +181,17 @@ class WhatsAppService:
                 
                 logger.info(f"📊 Interactive handler result: {interactive_result}")
                 
-                if interactive_result["status"] in ["conversation_started", "step_advanced", "conversation_completed"]:
-                    # Interactive conversation handled successfully
-                    logger.info(f"🔀 Interactive conversation handled: {interactive_result['status']}")
+                if interactive_result["status"] in [
+                    "conversation_started", 
+                    "step_advanced", 
+                    "conversation_completed",
+                    "message_saved",  # Agent mode - message saved for agent
+                    "agent_mode_activated",  # Customer just entered agent mode
+                    "agent_chat_ended",  # Agent chat ended
+                    "in_agent_mode"  # Interactive message ignored during agent mode
+                ]:
+                    # Interactive conversation or agent mode handled successfully
+                    logger.info(f"🔀 Interactive conversation/agent mode handled: {interactive_result['status']}")
                     return {
                         "status": "success",
                         "message_stored": True,

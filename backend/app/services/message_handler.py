@@ -30,6 +30,8 @@ class InteractiveMessageHandler:
         Returns:
             Processing result
         """
+        logger.info(f"📱 Incoming text from {phone_number}: '{text}'")
+        
         # PRIORITY 1: Check if user has an active agent session
         active_session = self.agent_service.get_active_session_by_phone(phone_number)
         
@@ -38,7 +40,7 @@ class InteractiveMessageHandler:
             logger.info(f"🔵 Agent session found for {phone_number}, handling in agent mode")
             return await self._handle_agent_mode(phone_number, text, active_session)
         
-        logger.info(f"📨 Processing text message from {phone_number}: '{text}'")
+        logger.info(f"📨 No agent session, processing as regular message")
         
         # PRIORITY 2: Check if this text matches any trigger keyword
         # This allows users to restart conversations by typing trigger words
