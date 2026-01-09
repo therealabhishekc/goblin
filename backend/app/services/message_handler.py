@@ -546,22 +546,8 @@ class InteractiveMessageHandler:
             message_text=text
         )
         
-        # If no agent assigned yet, remind customer
-        if session.status == "waiting":
-            # Only send reminder occasionally to avoid spam
-            # Check if we've sent a reminder recently
-            messages = self.agent_service.get_session_messages(str(session.id), limit=5)
-            recent_system_messages = [m for m in messages if m.sender_type == "system"]
-            
-            # Send reminder if no recent system messages
-            if len(recent_system_messages) == 0:
-                await send_whatsapp_message(
-                    phone_number,
-                    {
-                        "type": "text",
-                        "content": "⏳ Your message has been received. An agent will join shortly."
-                    }
-                )
+        # No automatic replies - agent will respond manually
+        logger.info(f"💬 Message saved for {session.status} session, no auto-reply sent")
         
         return {
             "status": "message_saved",
