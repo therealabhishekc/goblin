@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
 
-from app.database.connection import get_db_session
+from app.database.connection import get_database_session
 from app.services.agent_service import AgentService
 from app.services.conversation_service import ConversationService
 from app.models.agent import AgentSessionDB, AgentMessageDB, AgentSessionResponse, AgentMessageResponse, AgentMessageCreate
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/api/agent", tags=["agent"])
 @router.post("/sessions/start/{phone_number}")
 async def start_agent_session(
     phone_number: str,
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_database_session)
 ):
     """Customer requests to talk to an agent"""
     conv_service = ConversationService(db)
@@ -47,13 +47,13 @@ async def start_agent_session(
     }
 
 @router.get("/sessions/waiting", response_model=List[AgentSessionResponse])
-def get_waiting_sessions(db: Session = Depends(get_db_session)):
+def get_waiting_sessions(db: Session = Depends(get_database_session)):
     """Get all customers waiting for an agent"""
     agent_service = AgentService(db)
     return agent_service.get_waiting_sessions()
 
 @router.get("/sessions/my-chats/{agent_id}", response_model=List[AgentSessionResponse])
-def get_my_chats(agent_id: str, db: Session = Depends(get_db_session)):
+def get_my_chats(agent_id: str, db: Session = Depends(get_database_session)):
     """Get all active chats for an agent"""
     agent_service = AgentService(db)
     return agent_service.get_agent_sessions(agent_id)
@@ -63,7 +63,7 @@ async def assign_agent_to_session(
     session_id: str,
     agent_id: str,
     agent_name: str,
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_database_session)
 ):
     """Agent accepts a waiting session"""
     agent_service = AgentService(db)
@@ -97,7 +97,7 @@ async def assign_agent_to_session(
 @router.post("/sessions/{session_id}/end")
 async def end_agent_session(
     session_id: str,
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_database_session)
 ):
     """End an agent session"""
     agent_service = AgentService(db)
@@ -134,7 +134,7 @@ async def end_agent_session(
 def get_session_messages(
     session_id: str,
     limit: int = 100,
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_database_session)
 ):
     """Get all messages in a session"""
     agent_service = AgentService(db)
@@ -158,7 +158,7 @@ def get_session_messages(
 async def send_agent_message(
     session_id: str,
     message: AgentMessageCreate,
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_database_session)
 ):
     """Agent sends a message to customer"""
     agent_service = AgentService(db)
@@ -208,7 +208,7 @@ def get_chat_history(
     end_date: Optional[str] = None,
     limit: int = 50,
     offset: int = 0,
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_database_session)
 ):
     """
     Get chat history with filters
@@ -287,7 +287,7 @@ def get_chat_history(
 @router.get("/sessions/all", response_model=List[AgentSessionResponse])
 def get_all_sessions(
     status: Optional[str] = None,
-    db: Session = Depends(get_db_session)
+    db: Session = Depends(get_database_session)
 ):
     """Get all sessions regardless of agent (for admin/supervisor view)"""
     query = db.query(AgentSessionDB)
