@@ -35,7 +35,10 @@ class InteractiveMessageHandler:
         
         if active_session:
             # User is chatting with an agent
+            logger.info(f"🔵 Agent session found for {phone_number}, handling in agent mode")
             return await self._handle_agent_mode(phone_number, text, active_session)
+        
+        logger.info(f"📨 Processing text message from {phone_number}: '{text}'")
         
         # PRIORITY 2: Check if this text matches any trigger keyword
         # This allows users to restart conversations by typing trigger words

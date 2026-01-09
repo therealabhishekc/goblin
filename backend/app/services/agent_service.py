@@ -136,15 +136,27 @@ class AgentService:
     
     def get_active_session_by_phone(self, phone_number: str) -> Optional[AgentSessionDB]:
         """Get active agent session for a phone number"""
+        # First try to find by conversation
         conversation = self.db.query(ConversationStateDB).filter(
             ConversationStateDB.phone_number == phone_number
         ).first()
         
-        if not conversation:
-            return None
+        if conversation:
+            session = self.db.query(AgentSessionDB).filter(
+                AgentSessionDB.conversation_id == conversation.id,
+                AgentSessionDB.status.in_(["waiting", "active"])
+            ).first()
+            
+            if session:
+                return session
         
-        session = self.db.query(AgentSessionDB).filter(
-            AgentSessionDB.conversation_id == conversation.id,
+        # Also check if there's an active session by joining with conversation table
+        # This handles cases where conversation might be missing but session exists
+        session = self.db.query(AgentSessionDB).join(
+            ConversationStateDB,
+            AgentSessionDB.conversation_id == ConversationStateDB.id
+        ).filter(
+            ConversationStateDB.phone_number == phone_number,
             AgentSessionDB.status.in_(["waiting", "active"])
         ).first()
         
