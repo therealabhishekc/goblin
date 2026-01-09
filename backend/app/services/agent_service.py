@@ -30,6 +30,7 @@ class AgentService:
             status="waiting"
         )
         self.db.add(session)
+        self.db.flush()  # Flush to get the session.id
         
         # Add system message
         system_msg = AgentMessageDB(
