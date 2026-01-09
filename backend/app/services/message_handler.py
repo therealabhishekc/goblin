@@ -251,11 +251,11 @@ class InteractiveMessageHandler:
         if selection_id == "AGENT_MODE":
             logger.info(f"🙋 Customer {phone_number} requested agent mode")
             
-            # End current conversation
-            self.conv_service.end_conversation(phone_number)
-            
-            # Start agent session
+            # Start agent session FIRST (needs valid conversation_id)
             session = self.agent_service.start_agent_session(str(conversation.id))
+            
+            # Then end the conversation (conversation no longer needed)
+            self.conv_service.end_conversation(phone_number)
             
             await send_whatsapp_message(
                 phone_number,
