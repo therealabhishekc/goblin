@@ -77,6 +77,14 @@ class InteractiveMessageHandler:
             phone_number: Customer phone
             interactive_data: Button or list selection data
         """
+        # PRIORITY 1: Check if user has an active agent session
+        active_session = self.agent_service.get_active_session_by_phone(phone_number)
+        
+        if active_session:
+            # User is chatting with an agent - ignore interactive messages during agent mode
+            logger.info(f"🚫 Ignoring interactive message from {phone_number} - in agent mode")
+            return {"status": "in_agent_mode"}
+        
         # Extract selection
         if interactive_data.get("type") == "button_reply":
             selection_id = interactive_data["button_reply"]["id"]
