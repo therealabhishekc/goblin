@@ -67,7 +67,6 @@ class AgentSessionResponse(BaseModel):
         from_attributes = True
 
 class AgentMessageCreate(BaseModel):
-    session_id: str
     sender_type: str = Field(..., pattern="^(customer|agent|system)$")
     sender_id: Optional[str] = None
     message_text: str

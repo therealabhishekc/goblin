@@ -147,10 +147,16 @@ const AgentDashboard = () => {
       await axios.post(`${API_URL}/api/agent/sessions/${sessionId}/assign?agent_id=${agentId}&agent_name=${agentName}`);
       await refreshData();
       
-      // Select this session
-      const session = waitingSessions.find(s => s.id === sessionId);
-      if (session) {
-        setSelectedSession(session);
+      // Switch to Active Chats tab
+      setActiveTab('active');
+      
+      // Load my sessions again to get the updated session with agent_id
+      const response = await axios.get(`${API_URL}/api/agent/sessions/my-chats/${agentId}`);
+      const updatedSession = response.data.find(s => s.id === sessionId);
+      
+      if (updatedSession) {
+        setSelectedSession(updatedSession);
+        await loadMessages(sessionId);
       }
     } catch (error) {
       console.error('Error accepting chat:', error);
@@ -385,6 +391,7 @@ const AgentDashboard = () => {
                 ))}
               </div>
               
+              {/* Show input if session is active and belongs to this agent */}
               {selectedSession.status === 'active' && selectedSession.agent_id === agentId && (
                 <div className="message-input">
                   <input
@@ -395,6 +402,13 @@ const AgentDashboard = () => {
                     onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
                   />
                   <button onClick={sendMessage}>Send</button>
+                </div>
+              )}
+              
+              {/* Show waiting notice if session is still waiting */}
+              {selectedSession.status === 'waiting' && (
+                <div className="chat-waiting-notice">
+                  ⏳ Waiting for agent to accept...
                 </div>
               )}
               
